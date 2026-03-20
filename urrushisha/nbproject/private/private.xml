@@ -1,4 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project-private xmlns="http://www.netbeans.org/ns/project-private/1">
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
+    <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
+        <group>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Http/Requests/StoreCategoryRequest.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/resources/views/admin/categories/index.blade.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/resources/views/layouts/app.blade.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/routes/web.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Http/Controllers/FavoriteController.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Http/Controllers/MixController.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Models/Favorite.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/resources/views/mixes/index.blade.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/resources/views/favorites/index.blade.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/resources/views/mixes/create.blade.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Models/MixItem.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Http/Middleware/AdminMiddleware.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/bootstrap/app.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Http/Controllers/AdminController.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/resources/views/admin/index.blade.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Http/Controllers/Admin/BrandController.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Models/Brand.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Models/Flavor.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/resources/views/admin/flavors/create.blade.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Http/Requests/StoreFlavorRequest.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Http/Controllers/FlavorController.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Http/Controllers/Admin/FlavorController.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Models/Category.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/app/Models/Mix.php</file>
+            <file>file:/D:/xampp/htdocs/ProyectoUrrushisha/urrushisha/resources/views/index.blade.php</file>
+        </group>
+    </open-files>
 </project-private>
