@@ -902,6 +902,16 @@
             font-size: 0.88rem;
         }
     }
+    .pagination svg {
+        width: 1rem !important;
+        height: 1rem !important;
+    }
+
+    .pagination .page-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 </style>
 @endpush
 
