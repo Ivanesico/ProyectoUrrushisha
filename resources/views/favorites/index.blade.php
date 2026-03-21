@@ -47,7 +47,7 @@
         $flavor = $favorite->flavor;
         @endphp
 
-        <div class="col-sm-6 col-lg-4 col-xxl-3">
+        <div class="col-6 col-md-4 col-lg-3">
             <div class="card flavor-card border-0 h-100 position-relative"
                  onclick="openFlavorModal({{ $flavor->id }})"
                  data-id="{{ $flavor->id }}"
@@ -558,6 +558,178 @@
         .flavor-card:hover {
             transform: translateY(-4px) scale(1.01);
         }
+    }
+    .pagination-wrapper {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+
+    .pagination-wrapper nav {
+        background: rgba(255,255,255,0.06);
+        padding: 0.75rem 1rem;
+        border-radius: 18px;
+        border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    @media (max-width: 768px) {
+        .container.py-4 {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
+
+        .row.g-4 {
+            --bs-gutter-x: 0.75rem;
+            --bs-gutter-y: 0.75rem;
+        }
+
+        .flavor-card {
+            border-radius: 18px;
+        }
+
+        .flavor-image-wrapper {
+            height: 130px;
+            border-top-left-radius: 18px;
+            border-top-right-radius: 18px;
+        }
+
+        .card-top-actions {
+            top: 8px;
+            right: 8px;
+        }
+
+        .favorite-btn {
+            width: 34px;
+            height: 34px;
+            font-size: 1rem;
+        }
+
+        .flavor-card .card-body {
+            padding: 0.8rem !important;
+        }
+
+        .flavor-card .card-title {
+            font-size: 0.9rem;
+            line-height: 1.2;
+        }
+
+        .flavor-card .card-text {
+            font-size: 0.8rem;
+            line-height: 1.35;
+            margin-bottom: 0.65rem !important;
+        }
+
+        .badge-soft {
+            font-size: 0.68rem;
+            padding: 0.35rem 0.55rem;
+        }
+
+        .meta-list {
+            gap: 0.45rem;
+            margin-bottom: 0.75rem !important;
+        }
+
+        .meta-item {
+            gap: 0.5rem;
+        }
+
+        .meta-label,
+        .meta-value {
+            font-size: 0.72rem;
+        }
+
+        .ingredients-chip {
+            font-size: 0.7rem;
+            padding: 0.38rem 0.6rem;
+            border-radius: 999px;
+            max-width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .placeholder-text {
+            font-size: 2.4rem;
+        }
+
+        .hero-section {
+            padding: 1.5rem;
+        }
+
+        .hero-content {
+            align-items: start;
+        }
+
+        .flavor-card:hover {
+            transform: translateY(-4px) scale(1.01);
+        }
+
+        .flavor-modal-overlay {
+            padding: 12px;
+        }
+
+        .flavor-modal-card {
+            border-radius: 22px;
+            max-height: 92vh;
+        }
+
+        .flavor-modal-image-wrapper {
+            min-height: 220px;
+            border-top-left-radius: 22px;
+            border-top-right-radius: 22px;
+        }
+
+        .flavor-modal-close {
+            width: 38px;
+            height: 38px;
+            top: 12px;
+            right: 12px;
+            font-size: 1.4rem;
+        }
+
+        .modal-flavor-title {
+            font-size: 1.35rem;
+        }
+
+        .modal-meta-label,
+        .modal-meta-value,
+        .modal-description,
+        .modal-section-title {
+            font-size: 0.92rem;
+        }
+    }
+    .pagination {
+        margin-bottom: 0;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .page-item .page-link {
+        border: none;
+        border-radius: 12px !important;
+        background: rgba(255,255,255,0.95);
+        color: #111827;
+        font-weight: 700;
+        padding: 0.65rem 0.9rem;
+        min-width: 42px;
+        text-align: center;
+        transition: all 0.2s ease;
+    }
+
+    .page-item .page-link:hover {
+        background: #ffffff;
+        transform: translateY(-1px);
+    }
+
+    .page-item.active .page-link {
+        background: linear-gradient(135deg, #8b5cf6, #ec4899);
+        color: #fff;
+    }
+
+    .page-item.disabled .page-link {
+        background: rgba(255,255,255,0.45);
+        color: #6b7280;
     }
 </style>
 @endpush

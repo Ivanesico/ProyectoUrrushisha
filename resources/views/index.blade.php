@@ -123,7 +123,7 @@
 
     <div class="row g-4">
         @forelse($flavors as $flavor)
-        <div class="col-sm-6 col-lg-4 col-xxl-3">
+        <div class="col-6 col-md-4 col-lg-3">
             <div class="card flavor-card border-0 h-100 position-relative"
                  onclick="openFlavorModal({{ $flavor->id }})"
                  data-id="{{ $flavor->id }}"
@@ -754,6 +754,152 @@
 
         .flavor-card:hover {
             transform: translateY(-4px) scale(1.01);
+        }
+    }
+
+    @media (max-width: 768px) {
+        .container.py-4 {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
+
+        .row.g-4 {
+            --bs-gutter-x: 0.75rem;
+            --bs-gutter-y: 0.75rem;
+        }
+
+        .flavor-card {
+            border-radius: 18px;
+        }
+
+        .flavor-image-wrapper {
+            height: 130px;
+            border-top-left-radius: 18px;
+            border-top-right-radius: 18px;
+        }
+
+        .card-top-actions {
+            top: 8px;
+            right: 8px;
+        }
+
+        .favorite-btn {
+            width: 34px;
+            height: 34px;
+            font-size: 1rem;
+        }
+
+        .flavor-card .card-body {
+            padding: 0.8rem !important;
+        }
+
+        .flavor-card .card-title {
+            font-size: 0.9rem;
+            line-height: 1.2;
+        }
+
+        .flavor-card .card-text {
+            font-size: 0.8rem;
+            line-height: 1.35;
+            margin-bottom: 0.65rem !important;
+        }
+
+        .badge-soft {
+            font-size: 0.68rem;
+            padding: 0.35rem 0.55rem;
+        }
+
+        .meta-list {
+            gap: 0.45rem;
+            margin-bottom: 0.75rem !important;
+        }
+
+        .meta-item {
+            gap: 0.5rem;
+        }
+
+        .meta-label,
+        .meta-value {
+            font-size: 0.72rem;
+        }
+
+        .ingredients-chip {
+            font-size: 0.7rem;
+            padding: 0.38rem 0.6rem;
+            border-radius: 999px;
+            max-width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .placeholder-text {
+            font-size: 2.4rem;
+        }
+    }
+    .pagination-wrapper {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+
+    .pagination-wrapper nav {
+        background: rgba(255,255,255,0.08);
+        padding: 0.9rem 1rem;
+        border-radius: 20px;
+        border: 1px solid rgba(255,255,255,0.12);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    }
+
+    .pagination {
+        margin-bottom: 0;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .page-item .page-link {
+        border: none;
+        border-radius: 12px !important;
+        background: rgba(255,255,255,0.95);
+        color: #111827;
+        font-weight: 700;
+        padding: 0.65rem 0.9rem;
+        min-width: 42px;
+        text-align: center;
+        box-shadow: none;
+        transition: all 0.2s ease;
+    }
+
+    .page-item .page-link:hover {
+        background: #ffffff;
+        transform: translateY(-1px);
+    }
+
+    .page-item.active .page-link {
+        background: linear-gradient(135deg, #8b5cf6, #ec4899);
+        color: #fff;
+    }
+
+    .page-item.disabled .page-link {
+        background: rgba(255,255,255,0.45);
+        color: #6b7280;
+    }
+
+    @media (max-width: 768px) {
+        .pagination-wrapper nav {
+            width: 100%;
+            padding: 0.75rem;
+        }
+
+        .pagination {
+            gap: 0.25rem;
+        }
+
+        .page-item .page-link {
+            padding: 0.55rem 0.75rem;
+            min-width: 38px;
+            font-size: 0.88rem;
         }
     }
 </style>

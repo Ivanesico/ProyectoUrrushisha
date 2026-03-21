@@ -5,7 +5,7 @@
 @section('content')
 <div class="container py-5">
     @if(session('success'))
-        <div class="alert alert-success">{{ session('success') }}</div>
+    <div class="alert alert-success">{{ session('success') }}</div>
     @endif
 
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -25,28 +25,40 @@
                             <th>Categoría</th>
                             <th>Tipo</th>
                             <th>Público</th>
+                            <th></th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($flavors as $flavor)
-                            <tr>
-                                <td>{{ $flavor->id }}</td>
-                                <td>{{ $flavor->name }}</td>
-                                <td>{{ $flavor->brand->name ?? '-' }}</td>
-                                <td>{{ $flavor->category->name ?? '-' }}</td>
-                                <td>{{ $flavor->tobacco_type ?? '-' }}</td>
-                                <td>
-                                    @if($flavor->is_public)
-                                        <span class="badge text-bg-success">Sí</span>
-                                    @else
-                                        <span class="badge text-bg-secondary">No</span>
-                                    @endif
-                                </td>
-                            </tr>
+                        <tr>
+                            <td>{{ $flavor->id }}</td>
+                            <td>{{ $flavor->name }}</td>
+                            <td>{{ $flavor->brand->name ?? '-' }}</td>
+                            <td>{{ $flavor->category->name ?? '-' }}</td>
+                            <td>{{ $flavor->tobacco_type ?? '-' }}</td>
+                            <td>
+                                @if($flavor->is_public)
+                                <span class="badge text-bg-success">Sí</span>
+                                @else
+                                <span class="badge text-bg-secondary">No</span>
+                                @endif
+                            </td>
+                            <td> 
+                                <a href="{{ route('admin.flavors.edit', $flavor) }}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">Editar</a>
+                            </td>
+                            <td> 
+                                <form action="{{ route('admin.flavors.destroy', $flavor) }}" method="POST" onsubmit="return confirm('¿Seguro que quieres eliminar este sabor?')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-danger rounded-pill px-3">Eliminar</button>
+                                </form>
+                            </td>
+                        </tr>
                         @empty
-                            <tr>
-                                <td colspan="6" class="text-center py-4">No hay sabores registrados.</td>
-                            </tr>
+                        <tr>
+                            <td colspan="6" class="text-center py-4">No hay sabores registrados.</td>
+                        </tr>
                         @endforelse
                     </tbody>
                 </table>

@@ -5,7 +5,7 @@
 @section('content')
 <div class="container py-5">
     @if(session('success'))
-        <div class="alert alert-success">{{ session('success') }}</div>
+    <div class="alert alert-success">{{ session('success') }}</div>
     @endif
 
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -20,18 +20,31 @@
                     <tr>
                         <th>ID</th>
                         <th>Nombre</th>
+                        <th></th>
+                        <th></th>
+
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($brands as $brand)
-                        <tr>
-                            <td>{{ $brand->id }}</td>
-                            <td>{{ $brand->name }}</td>
-                        </tr>
+                    <tr>
+                        <td>{{ $brand->id }}</td>
+                        <td>{{ $brand->name }}</td>
+                        <td>                                
+                            <a href="{{ route('admin.brands.edit', $brand) }}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">Editar</a>
+                        </td>
+                        <td>
+                            <form action="{{ route('admin.brands.destroy', $brand) }}" method="POST" onsubmit="return confirm('¿Seguro que quieres eliminar esta marca?')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-danger rounded-pill px-3">Eliminar</button>
+                            </form>
+                        </td>
+                    </tr>
                     @empty
-                        <tr>
-                            <td colspan="2" class="text-center py-4">No hay marcas.</td>
-                        </tr>
+                    <tr>
+                        <td colspan="2" class="text-center py-4">No hay marcas.</td>
+                    </tr>
                     @endforelse
                 </tbody>
             </table>
