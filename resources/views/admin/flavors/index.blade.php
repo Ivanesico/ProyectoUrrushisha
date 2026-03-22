@@ -19,9 +19,42 @@
                 <table class="table table-hover mb-0 align-middle">
                     <thead class="table-light">
                         <tr>
-                            <th>ID</th>
-                            <th>Nombre</th>
-                            <th>Marca</th>
+                            <th>
+                                <a href="{{ route('admin.flavors.index', [
+                'sort' => 'id',
+                'direction' => ($sort === 'id' && $direction === 'asc') ? 'desc' : 'asc'
+            ]) }}" class="text-decoration-none text-dark">
+                                    ID
+                                    @if($sort === 'id')
+                                    {{ $direction === 'asc' ? '↑' : '↓' }}
+                                    @endif
+                                </a>
+                            </th>
+
+                            <th>
+                                <a href="{{ route('admin.flavors.index', [
+                'sort' => 'name',
+                'direction' => ($sort === 'name' && $direction === 'asc') ? 'desc' : 'asc'
+            ]) }}" class="text-decoration-none text-dark">
+                                    Nombre
+                                    @if($sort === 'name')
+                                    {{ $direction === 'asc' ? '↑' : '↓' }}
+                                    @endif
+                                </a>
+                            </th>
+
+                            <th>
+                                <a href="{{ route('admin.flavors.index', [
+                'sort' => 'brand',
+                'direction' => ($sort === 'brand' && $direction === 'asc') ? 'desc' : 'asc'
+            ]) }}" class="text-decoration-none text-dark">
+                                    Marca
+                                    @if($sort === 'brand')
+                                    {{ $direction === 'asc' ? '↑' : '↓' }}
+                                    @endif
+                                </a>
+                            </th>
+
                             <th>Categoría</th>
                             <th>Tipo</th>
                             <th>Público</th>
@@ -57,7 +90,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="6" class="text-center py-4">No hay sabores registrados.</td>
+                            <td colspan="8" class="text-center py-4">No hay sabores registrados.</td>
                         </tr>
                         @endforelse
                     </tbody>

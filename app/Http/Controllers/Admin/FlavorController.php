@@ -7,15 +7,36 @@ use App\Http\Requests\StoreFlavorRequest;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Flavor;
+use Illuminate\Http\Request;
 
 class FlavorController extends Controller {
 
-    public function index() {
-        $flavors = Flavor::with(['brand', 'category'])
-                ->orderBy('created_at', 'desc')
-                ->get();
+    public function index(Request $request) {
+        $allowedSorts = ['id', 'name', 'brand'];
+        $sort = $request->get('sort', 'id');
+        $direction = $request->get('direction', 'desc');
 
-        return view('admin.flavors.index', compact('flavors'));
+        if (!in_array($sort, $allowedSorts)) {
+            $sort = 'id';
+        }
+
+        if (!in_array($direction, ['asc', 'desc'])) {
+            $direction = 'desc';
+        }
+
+        $query = Flavor::with(['brand', 'category']);
+
+        if ($sort === 'brand') {
+            $query->leftJoin('brands', 'flavors.brand_id', '=', 'brands.id')
+                    ->select('flavors.*')
+                    ->orderBy('brands.name', $direction);
+        } else {
+            $query->orderBy($sort, $direction);
+        }
+
+        $flavors = $query->get();
+
+        return view('admin.flavors.index', compact('flavors', 'sort', 'direction'));
     }
 
     public function create() {
@@ -56,7 +77,7 @@ class FlavorController extends Controller {
     }
 
     public function update(StoreFlavorRequest $request, Flavor $flavor) {
-        
+
 
         $imagePath = $flavor->image_url;
 
