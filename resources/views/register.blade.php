@@ -10,9 +10,9 @@
             @include('svg.logo', ['width' => 400])
         </div>
 
-        <div id="alert" class="alert d-none"></div>
 
-        <form id="registerForm">
+        <form action="{{ route('auth.register') }}" method="POST">
+            @csrf
             <div class="mb-3 mt-2">
                 <label for="name" class="form-label">Nombre</label>
                 <input type="text" class="form-control" id="name" name="name" required>
@@ -52,7 +52,5 @@
 @endpush
 
 @push('scripts')
-
-@include('js.register')
 
 @endpush

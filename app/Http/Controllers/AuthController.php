@@ -21,11 +21,9 @@ class AuthController extends Controller {
 
         Auth::login($usuario);
         $request->session()->regenerate();
-        return response()->json([
-                    'success' => true,
-                    'message' => 'Usuario registrado con éxito',
-                    'user' => $usuario
-                        ], 201);
+        return redirect()
+                        ->route('home')
+                        ->with('success', 'Usuario registrado con éxito');
     }
 
     public function login(LoginRequest $request) {
