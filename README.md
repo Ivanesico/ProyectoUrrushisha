@@ -1,59 +1,138 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# UrruShisha
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+UrruShisha es una aplicación web desarrollada con Laravel para gestionar un catálogo de sabores de shisha/cachimba. El proyecto permite a los usuarios consultar sabores, filtrarlos, guardarlos como favoritos y crear mezclas personalizadas con diferentes proporciones.
 
-## About Laravel
+## Descripción del proyecto
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+El objetivo de este proyecto es crear una plataforma sencilla e intuitiva donde los usuarios puedan organizar sabores de shisha, consultar información sobre cada uno de ellos y guardar sus combinaciones favoritas.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+La aplicación incluye autenticación de usuarios, gestión de sabores, marcas y categorías, sistema de favoritos, creación de mezclas personalizadas y un panel de administración para gestionar la información principal del catálogo.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Funcionalidades principales
 
-## Learning Laravel
+* Registro e inicio de sesión de usuarios.
+* Consulta de catálogo de sabores.
+* Filtro de sabores por marca, categoría, ingredientes y tipo de tabaco.
+* Sistema de favoritos para guardar sabores.
+* Creación, edición y eliminación de mezclas personalizadas.
+* Asignación de proporciones a los sabores dentro de una mezcla.
+* Gestión de marcas.
+* Gestión de categorías.
+* Panel de administración para gestionar sabores, marcas y categorías.
+* Rutas protegidas mediante autenticación.
+* Control de acceso para usuarios administradores.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## Tecnologías utilizadas
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+* Laravel
+* PHP
+* Blade
+* MySQL
+* Tailwind CSS
+* Vite
+* HTML
+* CSS
+* GitHub
 
-## Laravel Sponsors
+## Estructura principal del proyecto
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+El proyecto sigue una estructura basada en Laravel y el patrón MVC:
 
-### Premium Partners
+* `app/Models`: modelos principales de la aplicación, como usuarios, sabores, marcas, categorías, favoritos y mezclas.
+* `app/Http/Controllers`: controladores encargados de gestionar la lógica de la aplicación.
+* `resources/views`: vistas Blade utilizadas para mostrar la interfaz.
+* `routes/web.php`: definición de rutas web.
+* `database/migrations`: migraciones de la base de datos.
+* `public`: archivos públicos de la aplicación.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## Base de datos
 
-## Contributing
+La aplicación trabaja con varias entidades relacionadas entre sí:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+* Usuarios
+* Marcas
+* Categorías
+* Sabores
+* Favoritos
+* Mezclas
+* Sabores incluidos en cada mezcla
 
-## Code of Conduct
+Estas relaciones permiten que cada usuario pueda guardar sus sabores favoritos y crear sus propias mezclas personalizadas.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Instalación y ejecución
 
-## Security Vulnerabilities
+1. Clonar el repositorio:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+git clone https://github.com/Ivanesico/ProyectoUrrushisha.git
+```
 
-## License
+2. Entrar en la carpeta del proyecto:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+cd ProyectoUrrushisha
+```
+
+3. Instalar dependencias de PHP:
+
+```bash
+composer install
+```
+
+4. Instalar dependencias de Node:
+
+```bash
+npm install
+```
+
+5. Copiar el archivo de entorno:
+
+```bash
+cp .env.example .env
+```
+
+6. Generar la clave de la aplicación:
+
+```bash
+php artisan key:generate
+```
+
+7. Configurar la conexión a la base de datos en el archivo `.env`.
+
+8. Ejecutar las migraciones:
+
+```bash
+php artisan migrate
+```
+
+9. Compilar los assets:
+
+```bash
+npm run dev
+```
+
+10. Levantar el servidor de Laravel:
+
+```bash
+php artisan serve
+```
+
+## Aprendizajes del proyecto
+
+Durante el desarrollo de UrruShisha he trabajado conceptos importantes del desarrollo web con Laravel, como:
+
+* Organización de un proyecto siguiendo el patrón MVC.
+* Creación de rutas, controladores, modelos y vistas.
+* Gestión de usuarios y autenticación.
+* Operaciones CRUD.
+* Relaciones entre tablas.
+* Uso de Blade para crear vistas dinámicas.
+* Validación de formularios.
+* Protección de rutas mediante middleware.
+* Gestión de una base de datos relacional.
+* Uso de GitHub para control de versiones.
+
+## Autor
+
+Proyecto desarrollado por Iván Escobar Sánchez como aplicación web personal para practicar y mejorar conocimientos en desarrollo web con Laravel.
+
