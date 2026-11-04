@@ -4,10 +4,8 @@
 
 @section('content')
 <div class="container py-4">
-    <div class="mb-4">
-        <h1 class="fw-bold text-white">Editar mezcla</h1>
-        <p class="text-light-emphasis">Modifica tu mezcla y ajusta los porcentajes.</p>
-    </div>
+    <h1 class="mix-form-title">Editar mezcla</h1>
+    <p class="mix-form-subtitle">Cambia los sabores o ajusta los porcentajes.</p>
 
     @if($errors->any())
     <div class="alert alert-danger rounded-4">
@@ -25,114 +23,39 @@
 
         <div class="row g-4">
             <div class="col-lg-4">
-                <div class="card p-4 rounded-4 border-0 shadow-sm">
+                <div class="mix-panel">
+                    <h2 class="mix-panel-title">Datos</h2>
+
                     <div class="mb-3">
-                        <label class="form-label">Nombre</label>
-                        <input type="text" name="name" class="form-control" required value="{{ is_array(old('name')) ? '' : old('name', $mix->name) }}">
+                        <label for="name" class="form-label">Nombre</label>
+                        <input type="text" name="name" id="name" class="form-control" required value="{{ is_array(old('name')) ? '' : old('name', $mix->name) }}">
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Notas</label>
-                        <textarea name="notes" class="form-control" rows="3">{{ is_array(old('notes')) ? '' : old('notes', $mix->notes) }}</textarea>
+                        <label for="notes" class="form-label">Notas</label>
+                        <textarea name="notes" id="notes" class="form-control" rows="3">{{ is_array(old('notes')) ? '' : old('notes', $mix->notes) }}</textarea>
                     </div>
 
                     <div class="form-check">
                         {{-- Tras un error no vale old() con valor por defecto: una casilla desmarcada no se envía y volvería a salir marcada --}}
-                        <input type="checkbox" name="is_public" class="form-check-input" value="1" {{ ($errors->any() ? old('is_public') : $mix->is_public) ? 'checked' : '' }}>
-                        <label class="form-check-label">Hacer pública</label>
+                        <input type="checkbox" name="is_public" id="is_public" class="form-check-input" value="1" {{ ($errors->any() ? old('is_public') : $mix->is_public) ? 'checked' : '' }}>
+                        <label for="is_public" class="form-check-label">Hacer pública</label>
                     </div>
                 </div>
             </div>
 
             <div class="col-lg-8">
-                <div class="card p-4 rounded-4 border-0 shadow-sm">
-                    <h5 class="fw-bold mb-3">Sabores</h5>
-
-                    <div id="flavor-list">
-                        @foreach($rows as $row)
-                        <div class="row g-2 align-items-center flavor-row mb-2">
-                            <div class="col-md-6">
-                                <select name="flavors[]" class="form-select" required>
-                                    <option value="">Selecciona sabor</option>
-                                    @foreach($flavors as $flavor)
-                                    <option value="{{ $flavor->id }}" @selected($row['flavor_id'] == $flavor->id)>
-                                        {{ $flavor->name }} ({{ $flavor->brand->name ?? '-' }})
-                                    </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            <div class="col-md-4">
-                                <input type="number" name="ratios[]" class="form-control" placeholder="%" min="1" max="100" required value="{{ $row['ratio'] }}">
-                            </div>
-
-                            <div class="col-md-2">
-                                <button type="button" class="btn btn-danger w-100 remove-row">X</button>
-                            </div>
-                        </div>
-                        @endforeach
-                    </div>
-
-                    <button type="button" id="add-row" class="btn btn-outline-dark mt-3">
-                        + Añadir sabor
-                    </button>
-
-                    <div class="mt-3 small text-muted">
-                        La suma total de porcentajes debe ser 100%.
-                    </div>
+                <div class="mix-panel">
+                    <h2 class="mix-panel-title">Sabores</h2>
+                    @include('mixes._flavor-picker')
                 </div>
             </div>
         </div>
 
-        <div class="mt-4 d-flex gap-2">
-            <button class="btn btn-dark px-4">Guardar cambios</button>
-            <a href="{{ route('mixes.index') }}" class="btn btn-outline-light px-4">Cancelar</a>
+        <div class="d-flex gap-2 mt-4">
+            <button class="btn mix-save">Guardar cambios</button>
+            <a href="{{ route('mixes.index') }}" class="mix-cancel">Cancelar</a>
         </div>
     </form>
-
-    <template id="flavor-row-template">
-        <div class="row g-2 align-items-center flavor-row mb-2">
-            <div class="col-md-6">
-                <select name="flavors[]" class="form-select" required>
-                    <option value="">Selecciona sabor</option>
-                    @foreach($flavors as $flavor)
-                    <option value="{{ $flavor->id }}">
-                        {{ $flavor->name }} ({{ $flavor->brand->name ?? '-' }})
-                    </option>
-                    @endforeach
-                </select>
-            </div>
-
-            <div class="col-md-4">
-                <input type="number" name="ratios[]" class="form-control" placeholder="%" min="1" max="100" required>
-            </div>
-
-            <div class="col-md-2">
-                <button type="button" class="btn btn-danger w-100 remove-row">X</button>
-            </div>
-        </div>
-    </template>
 </div>
 @endsection
-
-@push('scripts')
-<script>
-    const addBtn = document.getElementById('add-row');
-    const list = document.getElementById('flavor-list');
-    const template = document.getElementById('flavor-row-template');
-
-    addBtn.addEventListener('click', () => {
-        const clone = template.content.cloneNode(true);
-        list.appendChild(clone);
-    });
-
-    document.addEventListener('click', function (e) {
-        if (e.target.classList.contains('remove-row')) {
-            const rows = document.querySelectorAll('.flavor-row');
-            if (rows.length > 1) {
-                e.target.closest('.flavor-row').remove();
-            }
-        }
-    });
-</script>
-@endpush

@@ -13,7 +13,16 @@ class BrandController extends Controller {
      * Display a listing of the resource.
      */
     public function index() {
-        $brands = Brand::orderBy('name')->get();
+        $brands = Brand::query()
+            ->withCount(['flavors as public_flavors_count' => fn ($query) => $query->where('is_public', true)])
+            ->with(['flavors' => fn ($query) => $query
+                ->select('id', 'brand_id', 'name', 'image_url')
+                ->where('is_public', true)
+                ->whereNotNull('image_url')
+                ->orderBy('name')])
+            ->orderBy('name')
+            ->get();
+
         return view('brands.index', compact('brands'));
     }
 
@@ -36,7 +45,7 @@ class BrandController extends Controller {
      */
     public function show(Brand $brand) {
         
-        $flavors = $brand->flavors()->where('is_public', true)->get();
+        $flavors = $brand->flavors()->with('category')->where('is_public', true)->orderBy('name')->get();
         return view('brands.show', compact('brand', 'flavors'));
     }
 

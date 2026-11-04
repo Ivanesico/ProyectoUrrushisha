@@ -12,7 +12,7 @@ use App\Models\MixItem;
 class MixController extends Controller {
 
     public function index() {
-        $mixes = Mix::with(['items.flavor'])
+        $mixes = Mix::with(['items.flavor.brand'])
                 ->where('user_id', auth()->id())
                 ->latest()
                 ->get();

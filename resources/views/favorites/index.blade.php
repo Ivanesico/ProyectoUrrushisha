@@ -3,6 +3,11 @@
 @section('title', 'Favoritos')
 
 @section('content')
+@php
+    $activeFilters = collect([$filters['brand_id'], $filters['category_id'], $filters['tobacco_type']])->filter(fn ($value) => $value !== '')->count();
+    $isFiltering = collect(['search', 'brand_id', 'category_id', 'tobacco_type'])->contains(fn ($filter) => request()->filled($filter));
+    $showAdvanced = $activeFilters > 0 || $sort !== 'name_asc';
+@endphp
 <div class="container py-4">
     @if(session('success'))
     <div class="alert alert-success rounded-4 shadow-sm">
@@ -10,143 +15,176 @@
     </div>
     @endif
 
-    <section class="hero-section mb-5">
-        <div class="hero-overlay"></div>
-        <div class="hero-content">
-            <div>
-                <span class="hero-badge">Tus sabores guardados</span>
-                <h1 class="hero-title mt-3 mb-2">Mis favoritos</h1>
-                <p class="hero-subtitle mb-0">
-                    Accede rápidamente a los sabores que más te gustan y úsalos en tus mezclas.
-                </p>
+    <header class="fav-header">
+        <h1 class="fav-title">Mis favoritos</h1>
+        <p class="fav-count">
+            @if($isFiltering)
+            {{ $matchingCount }} de {{ $totalCount }} favoritos
+            @elseif($totalCount === 1)
+            1 favorito guardado
+            @elseif($totalCount > 1)
+            {{ $totalCount }} favoritos guardados
+            @else
+            Los sabores que guardes aparecerán aquí.
+            @endif
+        </p>
+    </header>
+
+    @if($totalCount === 0)
+    <div class="empty-state text-center py-5 px-4">
+        <div class="empty-icon mb-3" aria-hidden="true">♥</div>
+        <h2 class="empty-title">No tienes favoritos todavía</h2>
+        <p class="empty-subtitle mb-3">Pulsa el corazón de un sabor en el catálogo para guardarlo.</p>
+        <a href="{{ route('home') }}" class="btn fav-primary">Ver el catálogo</a>
+    </div>
+    @else
+    <form class="fav-toolbar" method="GET" action="{{ route('favorites.index') }}">
+        <div class="fav-search-row">
+            <div class="fav-search">
+                <label for="search" class="visually-hidden">Buscar por nombre o ingrediente</label>
+                <input type="search" name="search" id="search" class="form-control" placeholder="Nombre o ingrediente" value="{{ $filters['search'] }}">
             </div>
 
-            <div class="hero-actions">
-                <a href="{{ route('home') }}" class="btn btn-light btn-modern">
-                    Ver sabores
-                </a>
-                <a href="{{ route('mixes.index') }}" class="btn btn-outline-light btn-modern">
-                    Mezclas
-                </a>
+            <button class="btn fav-filters-toggle d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#favAdvanced" aria-expanded="{{ $showAdvanced ? 'true' : 'false' }}" aria-controls="favAdvanced">
+                Filtros{{ $activeFilters > 0 ? " ($activeFilters)" : '' }}
+            </button>
+        </div>
+
+        <div class="collapse fav-advanced {{ $showAdvanced ? 'show' : '' }}" id="favAdvanced">
+            <div class="fav-fields">
+                <div>
+                    <label for="brand_id" class="form-label">Marca</label>
+                    <select name="brand_id" id="brand_id" class="form-select" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        @foreach($brands as $brand)
+                        <option value="{{ $brand->id }}"{{ $filters['brand_id'] === (string) $brand->id ? ' selected' : '' }}>{{ $brand->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label for="category_id" class="form-label">Categoría</label>
+                    <select name="category_id" id="category_id" class="form-select" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        @foreach($categories as $category)
+                        <option value="{{ $category->id }}"{{ $filters['category_id'] === (string) $category->id ? ' selected' : '' }}>{{ $category->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label for="tobacco_type" class="form-label">Tipo</label>
+                    <select name="tobacco_type" id="tobacco_type" class="form-select" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        @foreach($tobaccoTypes as $type => $label)
+                        <option value="{{ $type }}"{{ $filters['tobacco_type'] === $type ? ' selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label for="sort" class="form-label">Ordenar por</label>
+                    <select name="sort" id="sort" class="form-select" onchange="this.form.submit()">
+                        @foreach($sorts as $value => $label)
+                        <option value="{{ $value }}"{{ $sort === $value ? ' selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="fav-actions">
+                    <button type="submit" class="btn fav-primary">Aplicar</button>
+                    @if($isFiltering || $sort !== 'name_asc')
+                    <a href="{{ route('favorites.index') }}" class="fav-clear">Limpiar</a>
+                    @endif
+                </div>
             </div>
         </div>
-    </section>
+    </form>
 
-    <section class="mb-3 d-flex justify-content-between align-items-center">
-        <div>
-            <h2 class="section-title mb-1">Sabores favoritos</h2>
-            <p class="section-subtitle mb-0">
-                {{ $favorites->count() }} favoritos guardados
-            </p>
-        </div>
-    </section>
+    @if($matchingCount === 0)
+    <div class="empty-state text-center py-5 px-4">
+        <h2 class="empty-title">Ningún favorito coincide</h2>
+        <p class="empty-subtitle mb-3">Cambia la búsqueda o quita los filtros para ver todos tus favoritos.</p>
+        <a href="{{ route('favorites.index') }}" class="btn fav-primary">Quitar filtros</a>
+    </div>
+    @endif
 
-    <div class="row g-4">
-        @forelse($favorites as $favorite)
+    @foreach($favoriteGroups as $groupLabel => $groupFavorites)
+    @if((string) $groupLabel !== '')
+    <h3 class="fav-group-title">{{ $groupLabel }}</h3>
+    @endif
+
+    <div class="row g-3 g-lg-4 fav-group">
+        @foreach($groupFavorites as $favorite)
         @php
         $flavor = $favorite->flavor;
         @endphp
 
         <div class="col-6 col-md-4 col-lg-3">
-            <div class="card flavor-card border-0 h-100 position-relative"
+            <article class="flavor-card"
+                 role="button"
+                 tabindex="0"
+                 aria-label="Ver detalles de {{ $flavor->name }}"
                  onclick="openFlavorModal({{ $flavor->id }})"
+                 onkeydown="if (event.key === 'Enter' && event.target === this) openFlavorModal({{ $flavor->id }})"
                  data-id="{{ $flavor->id }}"
                  data-name="{{ $flavor->name }}"
                  data-brand="{{ $flavor->brand->name ?? 'Sin marca' }}"
                  data-category="{{ $flavor->category->name ?? 'Sin categoría' }}"
-                 data-type="{{ $flavor->tobacco_type ?? 'No definido' }}"
+                 data-type="{{ $flavor->tobacco_type_label ?? 'No definido' }}"
                  data-description="{{ $flavor->description ?? 'Sin descripción disponible.' }}"
                  data-ingredients="{{ $flavor->ingredients_text ?? 'Sin ingredientes definidos' }}"
                  data-image="{{ $flavor->image_url ? asset('storage/' . $flavor->image_url) : '' }}">
 
-                <div class="card-top-actions">
-                    <form action="{{ route('favorites.store', $flavor) }}" method="POST" onclick="event.stopPropagation();">
-                        @csrf
-                        <button type="submit" class="favorite-btn active" title="Quitar de favoritos">
-                            ♥
-                        </button>
-                    </form>
-                </div>
+                <form class="card-top-actions" action="{{ route('favorites.store', $flavor) }}" method="POST" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
+                    @csrf
+                    <button type="submit" class="favorite-btn active" title="Quitar de favoritos" aria-label="Quitar {{ $flavor->name }} de favoritos">♥</button>
+                </form>
 
                 <div class="flavor-image-wrapper">
+                    <span class="placeholder-text">{{ $flavor->initial }}</span>
                     @if($flavor->image_url)
-                    <img
-                        src="{{ asset('storage/' . $flavor->image_url) }}"
-                        class="card-img-top flavor-image"
-                        alt="{{ $flavor->name }}"
-                        >
-                    @else
-                    <div class="flavor-placeholder d-flex align-items-center justify-content-center">
-                        <span class="placeholder-text">
-                            {{ $flavor->initial }}
-                        </span>
-                    </div>
+                    <img src="{{ asset('storage/' . $flavor->image_url) }}" class="flavor-image" alt="" loading="lazy" onerror="this.remove()">
                     @endif
                 </div>
 
-                <div class="card-body d-flex flex-column p-3">
-                    <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
-                        <h5 class="card-title fw-bold mb-0">{{ $flavor->name }}</h5>
+                <div class="flavor-card-body">
+                    <h2 class="flavor-card-name">{{ $flavor->name }}</h2>
+                    <p class="flavor-card-brand">{{ $flavor->brand->name ?? 'Sin marca' }}</p>
 
+                    <div class="flavor-card-tags">
+                        @if($flavor->tobacco_type_label)
+                        <span class="flavor-tag">{{ $flavor->tobacco_type_label }}</span>
+                        @endif
                         @if($flavor->category)
-                        <span class="badge badge-soft">
-                            {{ $flavor->category->name }}
-                        </span>
+                        <span class="flavor-tag">{{ $flavor->category->name }}</span>
                         @endif
                     </div>
-
-                    <div class="meta-list mb-3">
-                        <div class="meta-item">
-                            <span class="meta-label">Marca</span>
-                            <span class="meta-value">{{ $flavor->brand->name ?? 'Sin marca' }}</span>
-                        </div>
-
-                        <div class="meta-item">
-                            <span class="meta-label">Tipo</span>
-                            <span class="meta-value">{{ $flavor->tobacco_type ?? 'No definido' }}</span>
-                        </div>
-                    </div>
-
-                    <p class="card-text flex-grow-1 mb-3">
-                        {{ \Illuminate\Support\Str::limit($flavor->description ?? 'Sin descripción disponible.', 110) }}
-                    </p>
-
-                    <div class="ingredients-chip mb-3">
-                        {{ \Illuminate\Support\Str::limit($flavor->ingredients_text ?? 'Sin ingredientes definidos', 50) }}
-                    </div>
                 </div>
-            </div>
+            </article>
         </div>
-        @empty
-        <div class="col-12">
-            <div class="empty-state text-center py-5 px-4">
-                <div class="empty-icon mb-3">♥</div>
-                <h3 class="empty-title">No tienes favoritos todavía</h3>
-                <p class="empty-subtitle mb-0">
-                    Guarda sabores desde la ventana principal para verlos aquí.
-                </p>
-            </div>
-        </div>
-        @endforelse
+        @endforeach
     </div>
+    @endforeach
+    @endif
 
     <div id="flavorModalOverlay" class="flavor-modal-overlay" onclick="closeFlavorModal()">
-        <div class="flavor-modal-card" onclick="event.stopPropagation()">
-            <button class="flavor-modal-close" type="button" onclick="closeFlavorModal()">×</button>
+        <div class="flavor-modal-card" role="dialog" aria-modal="true" aria-labelledby="modalFlavorName" onclick="event.stopPropagation()">
+            <button class="flavor-modal-close" type="button" aria-label="Cerrar" onclick="closeFlavorModal()">×</button>
 
             <div class="row g-0">
                 <div class="col-lg-5">
                     <div class="flavor-modal-image-wrapper">
                         <img id="modalFlavorImage" src="" alt="" class="flavor-modal-image d-none">
                         <div id="modalFlavorPlaceholder" class="flavor-modal-placeholder d-flex align-items-center justify-content-center">
-                            <span id="modalFlavorPlaceholderText" class="placeholder-text">?</span>
+                            <span id="modalFlavorPlaceholderText" class="modal-placeholder-text">?</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="col-lg-7">
                     <div class="p-4 p-lg-5">
-                        <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+                        <div class="d-flex justify-content-between align-items-start gap-2 mb-3 modal-heading">
                             <h2 id="modalFlavorName" class="modal-flavor-title mb-0"></h2>
                             <span id="modalFlavorCategory" class="badge badge-soft"></span>
                         </div>
@@ -164,17 +202,17 @@
                         </div>
 
                         <div class="mb-4">
-                            <h6 class="modal-section-title">Descripción</h6>
+                            <h3 class="modal-section-title">Descripción</h3>
                             <p id="modalFlavorDescription" class="modal-description mb-0"></p>
                         </div>
 
                         <div class="mb-4">
-                            <h6 class="modal-section-title">Ingredientes</h6>
-                            <div id="modalFlavorIngredients" class="ingredients-chip"></div>
+                            <h3 class="modal-section-title">Ingredientes</h3>
+                            <p id="modalFlavorIngredients" class="modal-description mb-0"></p>
                         </div>
 
                         <div class="d-flex flex-wrap gap-2">
-                            <a href="{{ route('mixes.create') }}" class="btn btn-dark rounded-pill px-4">
+                            <a href="{{ route('mixes.create') }}" class="btn fav-primary">
                                 Crear mezcla
                             </a>
                             <button type="button" class="btn btn-outline-secondary rounded-pill px-4" onclick="closeFlavorModal()">
@@ -199,166 +237,234 @@
         min-height: 100vh;
     }
 
-    .hero-section {
-        position: relative;
-        overflow: hidden;
-        border-radius: 28px;
-        padding: 2rem;
-        background:
-            linear-gradient(135deg, rgba(30, 41, 59, 0.88), rgba(17, 24, 39, 0.82)),
-            linear-gradient(120deg, #8b5cf6, #ec4899);
-        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
-        border: 1px solid rgba(255,255,255,0.08);
+    .fav-header {
+        margin-bottom: 1.5rem;
     }
 
-    .hero-overlay {
-        position: absolute;
-        inset: 0;
-        background:
-            radial-gradient(circle at 80% 20%, rgba(255,255,255,0.14), transparent 28%),
-            radial-gradient(circle at 10% 90%, rgba(255,255,255,0.08), transparent 25%);
-        pointer-events: none;
-    }
-
-    .hero-content {
-        position: relative;
-        z-index: 1;
-        display: flex;
-        justify-content: space-between;
-        gap: 1.5rem;
-        align-items: end;
-        flex-wrap: wrap;
-    }
-
-    .hero-badge {
-        display: inline-block;
-        padding: 0.45rem 0.9rem;
-        border-radius: 999px;
-        background: rgba(255,255,255,0.14);
-        color: #f9fafb;
-        font-size: 0.85rem;
-        font-weight: 600;
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(255,255,255,0.12);
-    }
-
-    .hero-title {
+    .fav-title {
+        margin-bottom: 0.35rem;
         color: #ffffff;
         font-size: clamp(2rem, 4vw, 3rem);
         font-weight: 800;
         line-height: 1.05;
     }
 
-    .hero-subtitle {
-        color: rgba(255,255,255,0.8);
-        max-width: 680px;
-        font-size: 1rem;
+    .fav-count {
+        margin: 0;
+        color: var(--us-text);
     }
 
-    .hero-actions {
-        display: flex;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-    }
-
-    .btn-modern {
+    .fav-primary {
+        padding: 0.5rem 1.25rem;
+        border: 0;
         border-radius: 999px;
-        padding: 0.72rem 1.25rem;
-        font-weight: 600;
-        border-width: 1px;
-    }
-
-    .section-title {
-        color: #fff;
-        font-size: 1.4rem;
+        background: linear-gradient(135deg, #8b5cf6, #ec4899);
+        color: #ffffff;
         font-weight: 700;
     }
 
-    .section-subtitle {
-        color: rgba(255,255,255,0.62);
-        font-size: 0.95rem;
+    .fav-primary:hover {
+        background: linear-gradient(135deg, #7c3aed, #db2777);
+        color: #ffffff;
+    }
+
+    .fav-toolbar {
+        margin-bottom: 1.75rem;
+        padding: 1rem;
+        border: 1px solid var(--us-line);
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .fav-search-row {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .fav-search {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .fav-search input {
+        padding-left: 2.35rem;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9c0d8' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='M16 16l4.500 4.500'/%3E%3C/svg%3E");
+        background-position: 0.75rem center;
+        background-repeat: no-repeat;
+        background-size: 1.05rem;
+    }
+
+    .fav-filters-toggle {
+        flex-shrink: 0;
+        border: 1px solid var(--us-line);
+        border-radius: 999px;
+        color: var(--us-text-strong);
+        font-weight: 600;
+    }
+
+    .fav-fields {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+        gap: 0.75rem;
+        align-items: end;
+        padding-top: 0.75rem;
+    }
+
+    .fav-fields .form-label {
+        margin-bottom: 0.25rem;
+        color: var(--us-text);
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .fav-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .fav-clear {
+        color: var(--us-text);
+        font-size: 0.92rem;
+        font-weight: 600;
+    }
+
+    .fav-clear:hover {
+        color: var(--us-text-strong);
+    }
+
+    .fav-group-title {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 1.75rem 0 0.9rem;
+        color: #ffffff;
+        font-size: 1.1rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .fav-group-title::after {
+        content: "";
+        flex: 1;
+        min-width: 1.5rem;
+        height: 2px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, rgba(139, 92, 246, 0.8), rgba(236, 72, 153, 0));
     }
 
     .flavor-card {
-        border-radius: 26px;
-        overflow: visible;
-        background: rgba(255,255,255,0.98);
-        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
-        transition: transform 0.28s ease, box-shadow 0.28s ease;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+        border-radius: 22px;
+        background: #ffffff;
+        color: #111827;
         cursor: pointer;
+        transition: box-shadow 0.15s ease;
     }
 
     .flavor-card:hover {
-        transform: translateY(-6px) scale(1.02);
-        box-shadow: 0 24px 44px rgba(0, 0, 0, 0.24);
+        box-shadow: 0 0 0 2px #ec4899;
+    }
+
+    .flavor-card:focus-visible {
+        outline: 3px solid #f472b6;
+        outline-offset: 2px;
     }
 
     .card-top-actions {
         position: absolute;
-        top: 14px;
-        right: 14px;
-        z-index: 20;
+        top: 0.6rem;
+        right: 0.6rem;
+        z-index: 2;
+        margin: 0;
     }
 
     .favorite-btn {
-        width: 44px;
-        height: 44px;
+        width: 2.5rem;
+        height: 2.5rem;
         border: none;
         border-radius: 50%;
-        background: rgba(255,255,255,0.96);
-        box-shadow: 0 8px 18px rgba(0,0,0,0.16);
+        background: #ffffff;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
         color: #9ca3af;
-        font-size: 1.35rem;
-        font-weight: 700;
+        font-size: 1.2rem;
         line-height: 1;
-        transition: transform 0.2s ease, color 0.2s ease, background 0.2s ease;
-    }
-
-    .favorite-btn:hover {
-        transform: scale(1.08);
-        background: #fff;
-        color: #6b7280;
     }
 
     .favorite-btn.active {
         color: #e11d48;
     }
 
+    .favorite-btn:focus-visible {
+        outline: 3px solid #f472b6;
+        outline-offset: 2px;
+    }
+
     .flavor-image-wrapper {
-        height: 230px;
-        overflow: hidden;
-        border-top-left-radius: 26px;
-        border-top-right-radius: 26px;
-        background: linear-gradient(135deg, #eef2ff, #f5f3ff);
-    }
-
-    .flavor-image {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    .flavor-placeholder {
-        width: 100%;
-        height: 100%;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        aspect-ratio: 4 / 3;
         background: linear-gradient(135deg, #8b5cf6, #ec4899);
     }
 
+    .flavor-image {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        padding: 0.5rem;
+        background: linear-gradient(135deg, #eef2ff, #f5f3ff);
+        object-fit: contain;
+    }
+
     .placeholder-text {
-        font-size: 4rem;
+        color: #ffffff;
+        font-size: 2.8rem;
         font-weight: 800;
-        color: rgba(255,255,255,0.95);
     }
 
-    .flavor-card .card-title {
-        color: #111827;
-        font-size: 1.05rem;
+    .flavor-card-body {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        padding: 0.9rem 1rem 1rem;
     }
 
-    .flavor-card .card-text {
-        color: #1f2937;
-        line-height: 1.6;
-        font-size: 0.96rem;
+    .flavor-card-name {
+        margin: 0;
+        font-size: 1.02rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .flavor-card-brand {
+        margin: 0.1rem 0 0.7rem;
+        color: #4b5563;
+        font-size: 0.86rem;
+        overflow-wrap: anywhere;
+    }
+
+    .flavor-card-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        margin-top: auto;
+    }
+
+    .flavor-tag {
+        padding: 0.22rem 0.6rem;
+        border-radius: 999px;
+        background: #f3f4f6;
+        color: #374151;
+        font-size: 0.74rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
     }
 
     .badge-soft {
@@ -371,47 +477,6 @@
         white-space: normal;
         overflow-wrap: anywhere;
         min-width: 0;
-    }
-
-    .meta-list {
-        display: grid;
-        gap: 0.7rem;
-    }
-
-    .meta-item {
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
-        align-items: center;
-        padding-bottom: 0.2rem;
-        border-bottom: 1px solid #f3f4f6;
-    }
-
-    .meta-label {
-        color: #6b7280;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-
-    .meta-value {
-        color: #374151;
-        font-size: 0.9rem;
-        font-weight: 700;
-        text-align: right;
-    }
-
-    .ingredients-chip {
-        display: inline-flex;
-        align-items: center;
-        width: fit-content;
-        max-width: 100%;
-        padding: 0.55rem 0.85rem;
-        border-radius: 999px;
-        background: #f8fafc;
-        color: #475569;
-        font-size: 0.82rem;
-        font-weight: 600;
-        border: 1px solid #e5e7eb;
     }
 
     .flavor-modal-overlay {
@@ -432,55 +497,66 @@
 
     .flavor-modal-card {
         position: relative;
-        width: min(100%, 1100px);
+        width: min(100%, 1000px);
         max-height: 90vh;
         overflow-y: auto;
         border-radius: 28px;
-        background: rgba(255,255,255,0.99);
-        box-shadow: 0 30px 80px rgba(0,0,0,0.35);
+        background: #ffffff;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
     }
 
     .flavor-modal-close {
         position: absolute;
-        top: 18px;
-        right: 18px;
+        top: 16px;
+        right: 16px;
         z-index: 10;
-        width: 46px;
-        height: 46px;
+        width: 44px;
+        height: 44px;
         border: none;
         border-radius: 50%;
-        background: rgba(255,255,255,0.96);
+        background: #ffffff;
         color: #111827;
-        font-size: 1.8rem;
+        font-size: 1.7rem;
         line-height: 1;
-        box-shadow: 0 8px 18px rgba(0,0,0,0.16);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
     }
 
     .flavor-modal-image-wrapper {
         height: 100%;
         min-height: 320px;
         background: linear-gradient(135deg, #eef2ff, #f5f3ff);
-        border-top-left-radius: 28px;
-        border-bottom-left-radius: 28px;
-        overflow: hidden;
     }
 
     .flavor-modal-image {
         width: 100%;
         height: 100%;
-        object-fit: cover;
+        max-height: 70vh;
+        padding: 1rem;
+        object-fit: contain;
     }
 
     .flavor-modal-placeholder {
         width: 100%;
         height: 100%;
+        min-height: inherit;
         background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    }
+
+    .modal-placeholder-text {
+        color: #ffffff;
+        font-size: 4rem;
+        font-weight: 800;
+    }
+
+    .modal-heading {
+        padding-right: 2.5rem;
     }
 
     .modal-flavor-title {
         color: #111827;
         font-weight: 800;
-        font-size: clamp(1.6rem, 3vw, 2.4rem);
+        font-size: clamp(1.5rem, 3vw, 2.2rem);
+        overflow-wrap: anywhere;
     }
 
     .modal-meta-list {
@@ -508,162 +584,86 @@
     }
 
     .modal-section-title {
+        margin-bottom: 0.4rem;
         color: #374151;
+        font-size: 1rem;
         font-weight: 700;
-        margin-bottom: 0.6rem;
     }
 
     .modal-description {
         color: #1f2937;
-        line-height: 1.7;
+        line-height: 1.6;
+        overflow-wrap: anywhere;
     }
 
     .empty-state {
-        border-radius: 28px;
-        background: rgba(255,255,255,0.07);
-        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--us-line);
     }
 
     .empty-icon {
         font-size: 2.2rem;
-        color: rgba(255,255,255,0.72);
+        color: #f472b6;
     }
 
     .empty-title {
-        color: #fff;
-        font-weight: 800;
+        color: #ffffff;
+        font-size: 1.4rem;
+        font-weight: 700;
     }
 
     .empty-subtitle {
-        color: rgba(255,255,255,0.68);
-        max-width: 620px;
-        margin: 0 auto;
+        color: var(--us-text);
     }
 
-    @media (max-width: 991px) {
+    @media (min-width: 768px) {
+        /* In desktop the filters are always visible: the toggle is only for phones. */
+        .fav-advanced.collapse {
+            display: block !important;
+            height: auto !important;
+        }
+    }
+
+    @media (max-width: 991.98px) {
         .flavor-modal-image-wrapper {
-            min-height: 240px;
-            border-bottom-left-radius: 0;
-            border-top-right-radius: 28px;
+            min-height: 220px;
+        }
+
+        .flavor-modal-image {
+            max-height: 240px;
         }
     }
 
-    @media (max-width: 768px) {
-        .hero-section {
-            padding: 1.5rem;
+    @media (max-width: 767.98px) {
+        .fav-fields {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        .hero-content {
-            align-items: start;
-        }
-
-        .flavor-card:hover {
-            transform: translateY(-4px) scale(1.01);
-        }
-    }
-    .pagination-wrapper {
-        width: 100%;
-        display: flex;
-        justify-content: center;
-    }
-
-    .pagination-wrapper nav {
-        background: rgba(255,255,255,0.06);
-        padding: 0.75rem 1rem;
-        border-radius: 18px;
-        border: 1px solid rgba(255,255,255,0.08);
-    }
-
-    @media (max-width: 768px) {
-        .container.py-4 {
-            padding-left: 0.75rem;
-            padding-right: 0.75rem;
-        }
-
-        .row.g-4 {
-            --bs-gutter-x: 0.75rem;
-            --bs-gutter-y: 0.75rem;
+        .fav-actions {
+            grid-column: 1 / -1;
         }
 
         .flavor-card {
             border-radius: 18px;
         }
 
-        .flavor-image-wrapper {
-            height: 130px;
-            border-top-left-radius: 18px;
-            border-top-right-radius: 18px;
-        }
-
-        .card-top-actions {
-            top: 8px;
-            right: 8px;
-        }
-
         .favorite-btn {
-            width: 34px;
-            height: 34px;
+            width: 2.2rem;
+            height: 2.2rem;
             font-size: 1rem;
         }
 
-        .flavor-card .card-body {
-            padding: 0.8rem !important;
+        .flavor-card-body {
+            padding: 0.75rem 0.8rem 0.85rem;
         }
 
-        .flavor-card .card-title {
-            font-size: 0.9rem;
-            line-height: 1.2;
+        .flavor-card-name {
+            font-size: 0.92rem;
         }
 
-        .flavor-card .card-text {
-            font-size: 0.8rem;
-            line-height: 1.35;
-            margin-bottom: 0.65rem !important;
-        }
-
-        .badge-soft {
-            font-size: 0.68rem;
-            padding: 0.35rem 0.55rem;
-        }
-
-        .meta-list {
-            gap: 0.45rem;
-            margin-bottom: 0.75rem !important;
-        }
-
-        .meta-item {
-            gap: 0.5rem;
-        }
-
-        .meta-label,
-        .meta-value {
-            font-size: 0.72rem;
-        }
-
-        .ingredients-chip {
-            font-size: 0.7rem;
-            padding: 0.38rem 0.6rem;
-            border-radius: 999px;
-            max-width: 100%;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .placeholder-text {
-            font-size: 2.4rem;
-        }
-
-        .hero-section {
-            padding: 1.5rem;
-        }
-
-        .hero-content {
-            align-items: start;
-        }
-
-        .flavor-card:hover {
-            transform: translateY(-4px) scale(1.01);
+        .flavor-card-brand {
+            font-size: 0.78rem;
         }
 
         .flavor-modal-overlay {
@@ -674,64 +674,12 @@
             border-radius: 22px;
             max-height: 92vh;
         }
+    }
 
-        .flavor-modal-image-wrapper {
-            min-height: 220px;
-            border-top-left-radius: 22px;
-            border-top-right-radius: 22px;
+    @media (prefers-reduced-motion: reduce) {
+        .flavor-card {
+            transition: none;
         }
-
-        .flavor-modal-close {
-            width: 38px;
-            height: 38px;
-            top: 12px;
-            right: 12px;
-            font-size: 1.4rem;
-        }
-
-        .modal-flavor-title {
-            font-size: 1.35rem;
-        }
-
-        .modal-meta-label,
-        .modal-meta-value,
-        .modal-description,
-        .modal-section-title {
-            font-size: 0.92rem;
-        }
-    }
-    .pagination {
-        margin-bottom: 0;
-        gap: 0.35rem;
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-
-    .page-item .page-link {
-        border: none;
-        border-radius: 12px !important;
-        background: rgba(255,255,255,0.95);
-        color: #111827;
-        font-weight: 700;
-        padding: 0.65rem 0.9rem;
-        min-width: 42px;
-        text-align: center;
-        transition: all 0.2s ease;
-    }
-
-    .page-item .page-link:hover {
-        background: #ffffff;
-        transform: translateY(-1px);
-    }
-
-    .page-item.active .page-link {
-        background: linear-gradient(135deg, #8b5cf6, #ec4899);
-        color: #fff;
-    }
-
-    .page-item.disabled .page-link {
-        background: rgba(255,255,255,0.45);
-        color: #6b7280;
     }
 </style>
 @endpush
@@ -739,42 +687,47 @@
 @push('scripts')
 <script>
     function openFlavorModal(id) {
-    const card = document.querySelector(`.flavor-card[data-id="${id}"]`);
-    if (!card) return;
-    document.getElementById('modalFlavorName').textContent = card.dataset.name || '';
-    document.getElementById('modalFlavorBrand').textContent = card.dataset.brand || '';
-    document.getElementById('modalFlavorCategory').textContent = card.dataset.category || '';
-    document.getElementById('modalFlavorType').textContent = card.dataset.type || '';
-    document.getElementById('modalFlavorDescription').textContent = card.dataset.description || '';
-    document.getElementById('modalFlavorIngredients').textContent = card.dataset.ingredients || '';
-    const image = card.dataset.image || '';
-    const imageEl = document.getElementById('modalFlavorImage');
-    const placeholderEl = document.getElementById('modalFlavorPlaceholder');
-    const placeholderTextEl = document.getElementById('modalFlavorPlaceholderText');
-    if (image) {
-    imageEl.src = image;
-    imageEl.alt = card.dataset.name || '';
-    imageEl.classList.remove('d-none');
-    placeholderEl.classList.add('d-none');
-    } else {
-    imageEl.classList.add('d-none');
-    placeholderEl.classList.remove('d-none');
-    placeholderTextEl.textContent = (card.dataset.name || '?').charAt(0).toUpperCase();
-    }
+        const card = document.querySelector(`.flavor-card[data-id="${id}"]`);
+        if (!card) return;
 
-    document.getElementById('flavorModalOverlay').classList.add('show');
-    document.body.style.overflow = 'hidden';
+        document.getElementById('modalFlavorName').textContent = card.dataset.name || '';
+        document.getElementById('modalFlavorBrand').textContent = card.dataset.brand || '';
+        document.getElementById('modalFlavorCategory').textContent = card.dataset.category || '';
+        document.getElementById('modalFlavorType').textContent = card.dataset.type || '';
+        document.getElementById('modalFlavorDescription').textContent = card.dataset.description || '';
+        document.getElementById('modalFlavorIngredients').textContent = card.dataset.ingredients || '';
+
+        const image = card.dataset.image || '';
+        const imageEl = document.getElementById('modalFlavorImage');
+        const placeholderEl = document.getElementById('modalFlavorPlaceholder');
+        const placeholderTextEl = document.getElementById('modalFlavorPlaceholderText');
+
+        if (image) {
+            imageEl.src = image;
+            imageEl.alt = card.dataset.name || '';
+            imageEl.classList.remove('d-none');
+            placeholderEl.classList.add('d-none');
+            placeholderEl.classList.remove('d-flex');
+        } else {
+            imageEl.classList.add('d-none');
+            placeholderEl.classList.remove('d-none');
+            placeholderEl.classList.add('d-flex');
+            placeholderTextEl.textContent = (card.dataset.name || '?').charAt(0).toUpperCase();
+        }
+
+        document.getElementById('flavorModalOverlay').classList.add('show');
+        document.body.style.overflow = 'hidden';
     }
 
     function closeFlavorModal() {
-    document.getElementById('flavorModalOverlay').classList.remove('show');
-    document.body.style.overflow = '';
+        document.getElementById('flavorModalOverlay').classList.remove('show');
+        document.body.style.overflow = '';
     }
 
-    document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-    closeFlavorModal();
-    }
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            closeFlavorModal();
+        }
     });
 </script>
 @endpush

@@ -216,6 +216,17 @@ class AuthTest extends TestCase
     }
 
     // RF-9
+    public function test_login_and_registration_show_the_logo_and_every_page_has_its_icon(): void
+    {
+        foreach ([route('login'), route('register')] as $url) {
+            $this->get($url)
+                ->assertOk()
+                ->assertSee('images/logo-urrushisha-grande.png', false)
+                ->assertSee('alt="UrruShisha"', false)
+                ->assertSee('images/favicon-urrushisha.png', false);
+        }
+    }
+
     public function test_the_login_page_does_not_include_the_registration_script(): void
     {
         $this->get(route('login'))

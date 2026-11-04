@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\Brand;
+use App\Models\Category;
 use App\Models\Favorite;
 use App\Models\Flavor;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class FavoriteTest extends TestCase
@@ -123,6 +126,191 @@ class FavoriteTest extends TestCase
 
         $this->from(route('favorites.index'))->post(route('favorites.store', $flavor));
         $this->assertFalse($this->favoriteExists($user, $flavor));
+    }
+
+    // Filtros y orden
+
+    private function favoriteFor(User $user, array $attributes, string $addedAt = '2026-01-01 10:00:00'): Flavor
+    {
+        $flavor = Flavor::factory()->create($attributes);
+        Favorite::create(['user_id' => $user->id, 'flavor_id' => $flavor->id]);
+        Favorite::where('user_id', $user->id)->where('flavor_id', $flavor->id)->update(['created_at' => $addedAt]);
+
+        return $flavor;
+    }
+
+    public function test_it_filters_by_brand_category_and_type(): void
+    {
+        $user = User::factory()->create();
+        $brand = Brand::factory()->create();
+        $category = Category::factory()->create();
+        $this->favoriteFor($user, ['name' => 'De la marca', 'brand_id' => $brand->id]);
+        $this->favoriteFor($user, ['name' => 'De la categoria', 'category_id' => $category->id]);
+        $this->favoriteFor($user, ['name' => 'Del tipo', 'tobacco_type' => 'base']);
+
+        $this->actingAs($user);
+
+        $this->get(route('favorites.index', ['brand_id' => $brand->id]))
+            ->assertSee('De la marca')->assertDontSee('De la categoria')->assertDontSee('Del tipo');
+        $this->get(route('favorites.index', ['category_id' => $category->id]))
+            ->assertSee('De la categoria')->assertDontSee('De la marca')->assertDontSee('Del tipo');
+        $this->get(route('favorites.index', ['tobacco_type' => 'base']))
+            ->assertSee('Del tipo')->assertDontSee('De la marca')->assertDontSee('De la categoria');
+    }
+
+    public function test_the_filters_combine_and_show_how_many_favorites_match(): void
+    {
+        $user = User::factory()->create();
+        $brand = Brand::factory()->create();
+        $this->favoriteFor($user, ['name' => 'Cumple', 'brand_id' => $brand->id, 'tobacco_type' => 'rojo']);
+        $this->favoriteFor($user, ['name' => 'Otro tipo', 'brand_id' => $brand->id, 'tobacco_type' => 'negro']);
+        $this->favoriteFor($user, ['name' => 'Otra marca', 'tobacco_type' => 'rojo']);
+
+        $this->actingAs($user)->get(route('favorites.index', ['brand_id' => $brand->id, 'tobacco_type' => 'rojo']))
+            ->assertSee('Cumple')
+            ->assertDontSee('Otro tipo')
+            ->assertDontSee('Otra marca')
+            ->assertSee('1 de 3 favoritos');
+    }
+
+    public function test_the_search_ignores_case_and_accents_in_name_and_ingredients(): void
+    {
+        $user = User::factory()->create();
+        $this->favoriteFor($user, ['name' => 'Piña Tropical', 'ingredients_text' => 'Coco']);
+        $this->favoriteFor($user, ['name' => 'Bosque', 'ingredients_text' => 'Arándano y hielo']);
+
+        $this->actingAs($user);
+
+        $this->get(route('favorites.index', ['search' => 'PINA']))->assertSee('Piña Tropical')->assertDontSee('Bosque');
+        $this->get(route('favorites.index', ['search' => 'arandano']))->assertSee('Bosque')->assertDontSee('Piña Tropical');
+    }
+
+    /**
+     * @return array<string, array{string, list<string>}>
+     */
+    public static function sorts(): array
+    {
+        return [
+            'nombre A-Z, sin indicar' => ['', ['Ámbar', 'Coco', 'Menta']],
+            'nombre A-Z' => ['name_asc', ['Ámbar', 'Coco', 'Menta']],
+            'nombre Z-A' => ['name_desc', ['Menta', 'Coco', 'Ámbar']],
+            'marca' => ['brand', ['Coco', 'Menta', 'Ámbar']],
+            'categoría, sin categoría al final' => ['category', ['Menta', 'Coco', 'Ámbar']],
+            'tipo, sin tipo al final' => ['type', ['Coco', 'Ámbar', 'Menta']],
+            'recientes' => ['recent', ['Coco', 'Ámbar', 'Menta']],
+            'valor no válido' => ['drop table', ['Ámbar', 'Coco', 'Menta']],
+        ];
+    }
+
+    #[DataProvider('sorts')]
+    public function test_it_sorts_the_favorites(string $sort, array $expectedOrder): void
+    {
+        $user = User::factory()->create();
+        $first = Brand::factory()->create(['name' => 'Al Fakher']);
+        $last = Brand::factory()->create(['name' => 'Zomo']);
+        $category = Category::factory()->create(['name' => 'Frutal']);
+        $other = Category::factory()->create(['name' => 'Dulce']);
+
+        $this->favoriteFor($user, ['name' => 'Menta', 'brand_id' => $first->id, 'category_id' => $other->id, 'tobacco_type' => null], '2026-01-01 10:00:00');
+        $this->favoriteFor($user, ['name' => 'Ámbar', 'brand_id' => $last->id, 'category_id' => null, 'tobacco_type' => 'rubio'], '2026-01-02 10:00:00');
+        $this->favoriteFor($user, ['name' => 'Coco', 'brand_id' => $first->id, 'category_id' => $category->id, 'tobacco_type' => 'negro'], '2026-01-03 10:00:00');
+
+        $response = $this->actingAs($user)->get(route('favorites.index', ['sort' => $sort]))->assertOk();
+
+        preg_match_all('/data-name="([^"]+)"/u', $response->getContent(), $names);
+        $this->assertSame($expectedOrder, $names[1]);
+    }
+
+    public function test_sorting_by_a_field_groups_the_favorites_under_a_heading(): void
+    {
+        $user = User::factory()->create();
+        $brand = Brand::factory()->create(['name' => 'Al Fakher']);
+        $this->favoriteFor($user, ['name' => 'Menta', 'brand_id' => $brand->id, 'category_id' => null, 'tobacco_type' => 'sin_nicotina']);
+
+        $this->actingAs($user);
+
+        $this->get(route('favorites.index', ['sort' => 'brand']))->assertSee('<h3 class="fav-group-title">Al Fakher</h3>', false);
+        $this->get(route('favorites.index', ['sort' => 'type']))->assertSee('<h3 class="fav-group-title">Sin nicotina</h3>', false);
+        $this->get(route('favorites.index', ['sort' => 'category']))->assertSee('<h3 class="fav-group-title">Sin categoría</h3>', false);
+        $this->get(route('favorites.index'))->assertDontSee('<h3 class="fav-group-title"', false);
+    }
+
+    public function test_the_filters_only_offer_values_of_the_user_favorites_and_keep_the_selection(): void
+    {
+        $user = User::factory()->create();
+        $mine = Brand::factory()->create(['name' => 'Marca mía']);
+        Brand::factory()->create(['name' => 'Marca ajena']);
+        $this->favoriteFor($user, ['brand_id' => $mine->id, 'tobacco_type' => 'base']);
+        Flavor::factory()->create(['tobacco_type' => 'rojo']);
+
+        $response = $this->actingAs($user)
+            ->get(route('favorites.index', ['brand_id' => $mine->id, 'tobacco_type' => 'base', 'sort' => 'brand', 'search' => 'x']))
+            ->assertOk();
+
+        $response->assertSee('Marca mía');
+        $response->assertDontSee('Marca ajena');
+        $response->assertSee('<option value="'.$mine->id.'" selected>', false);
+        $response->assertSee('<option value="base" selected>', false);
+        $response->assertDontSee('<option value="rojo"', false);
+        $response->assertSee('<option value="brand" selected>', false);
+        $response->assertSee('value="x"', false);
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>}>
+     */
+    public static function invalidFilters(): array
+    {
+        return [
+            'marca no numérica' => [['brand_id' => 'abc']],
+            'marca como array' => [['brand_id' => ['1']]],
+            'categoría negativa' => [['category_id' => '-1']],
+            'tipo fuera de la lista' => [['tobacco_type' => 'virginia']],
+            'tipo como array' => [['tobacco_type' => ['rubio']]],
+            'búsqueda como array' => [['search' => ['Menta']]],
+        ];
+    }
+
+    #[DataProvider('invalidFilters')]
+    public function test_an_invalid_filter_gives_no_results_without_error(array $query): void
+    {
+        $user = User::factory()->create();
+        $this->favoriteFor($user, ['name' => 'Menta', 'tobacco_type' => 'rubio']);
+
+        $this->actingAs($user)->get(route('favorites.index', $query))
+            ->assertOk()
+            ->assertDontSee('data-name="Menta"', false)
+            ->assertSee('Ningún favorito coincide');
+    }
+
+    public function test_an_invalid_sort_as_array_uses_the_default_order(): void
+    {
+        $user = User::factory()->create();
+        $this->favoriteFor($user, ['name' => 'Menta']);
+
+        $this->actingAs($user)->get(route('favorites.index', ['sort' => ['brand']]))
+            ->assertOk()
+            ->assertSee('data-name="Menta"', false);
+    }
+
+    public function test_a_user_without_favorites_is_sent_to_the_catalog_and_sees_no_filters(): void
+    {
+        $this->actingAs(User::factory()->create())->get(route('favorites.index'))
+            ->assertOk()
+            ->assertSee('No tienes favoritos todavía')
+            ->assertSee('href="'.route('home').'"', false)
+            ->assertDontSee('<form class="fav-toolbar"', false);
+    }
+
+    public function test_removing_a_favorite_returns_to_the_filtered_list(): void
+    {
+        $user = User::factory()->create();
+        $flavor = $this->favoriteFor($user, ['tobacco_type' => 'base']);
+        $filtered = route('favorites.index', ['tobacco_type' => 'base']);
+
+        $this->actingAs($user)->from($filtered)
+            ->post(route('favorites.store', $flavor))
+            ->assertRedirect($filtered);
     }
 
     // RF-19

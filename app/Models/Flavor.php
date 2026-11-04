@@ -61,6 +61,14 @@ class Flavor extends Model {
         return mb_strtoupper(mb_substr($this->name, 0, 1));
     }
 
+    public function getTobaccoTypeLabelAttribute(): ?string {
+        return $this->tobacco_type ? self::tobaccoTypeLabel($this->tobacco_type) : null;
+    }
+
+    public static function tobaccoTypeLabel(string $type): string {
+        return ucfirst(str_replace('_', ' ', $type));
+    }
+
     public static function normalizeSearchTerm(string $term): string {
         return strtr(mb_strtolower($term), self::SEARCH_REPLACEMENTS);
     }

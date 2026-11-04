@@ -252,6 +252,49 @@ class AdminFlavorTest extends TestCase
         $this->assertSame($type, $flavor->fresh()->tobacco_type);
     }
 
+    public function test_the_forms_offer_the_tobacco_types_as_a_dropdown(): void
+    {
+        $flavor = Flavor::factory()->create(['tobacco_type' => null]);
+
+        foreach ([route('admin.flavors.create'), route('admin.flavors.edit', $flavor)] as $url) {
+            $response = $this->get($url)
+                ->assertOk()
+                ->assertSee('<select name="tobacco_type"', false)
+                ->assertDontSee('<input type="text" name="tobacco_type"', false)
+                ->assertSee('<option value="">Sin especificar</option>', false);
+
+            foreach (Flavor::TOBACCO_TYPES as $type) {
+                $response->assertSee('<option value="'.$type.'"', false)
+                    ->assertDontSee('<option value="'.$type.'" selected>', false);
+            }
+        }
+    }
+
+    public function test_the_edit_form_selects_the_saved_tobacco_type(): void
+    {
+        $flavor = Flavor::factory()->create(['tobacco_type' => 'base']);
+
+        $this->get(route('admin.flavors.edit', $flavor))
+            ->assertSee('<option value="base" selected>', false)
+            ->assertDontSee('<option value="rubio" selected>', false);
+    }
+
+    public function test_a_rejected_form_keeps_the_chosen_tobacco_type(): void
+    {
+        $flavor = Flavor::factory()->create(['tobacco_type' => 'rubio']);
+
+        $this->from(route('admin.flavors.edit', $flavor))
+            ->followingRedirects()
+            ->put(route('admin.flavors.update', $flavor), $this->payload(['name' => '', 'tobacco_type' => 'rojo']))
+            ->assertSee('<option value="rojo" selected>', false)
+            ->assertDontSee('<option value="rubio" selected>', false);
+
+        $this->from(route('admin.flavors.create'))
+            ->followingRedirects()
+            ->post(route('admin.flavors.store'), $this->payload(['name' => '', 'tobacco_type' => 'base']))
+            ->assertSee('<option value="base" selected>', false);
+    }
+
     public function test_an_empty_tobacco_type_is_accepted(): void
     {
         $this->post(route('admin.flavors.store'), $this->payload(['tobacco_type' => '']))->assertSessionHasNoErrors();
@@ -291,7 +334,11 @@ class AdminFlavorTest extends TestCase
             ->from(route('admin.flavors.create'))
             ->post(route('admin.flavors.store'), $this->payload(['tobacco_type' => 'Virginia']));
 
-        $response->assertOk()->assertSee(self::TOBACCO_TYPE_MESSAGE)->assertSee('Virginia');
+        $response->assertOk()->assertSee(self::TOBACCO_TYPE_MESSAGE)->assertDontSee('value="Virginia"', false);
+
+        foreach (Flavor::TOBACCO_TYPES as $type) {
+            $response->assertDontSee('<option value="'.$type.'" selected>', false);
+        }
     }
 
     public function test_an_array_as_tobacco_type_does_not_break_the_forms(): void

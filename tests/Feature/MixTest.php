@@ -581,6 +581,43 @@ class MixTest extends TestCase
         $this->assertCheckboxState($response->getContent(), false);
     }
 
+    public function test_the_forms_give_the_search_the_name_and_brand_of_each_flavor(): void
+    {
+        $mix = $this->savedMix();
+        $brand = e($this->first->brand->name);
+
+        foreach ([route('mixes.create'), route('mixes.edit', $mix)] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+            $template = $this->newRowTemplate($html);
+
+            $this->assertMatchesRegularExpression(
+                '/<option value="'.$this->first->id.'"\s+data-name="'.preg_quote(e($this->first->name), '/').'" data-brand="'.preg_quote($brand, '/').'"/',
+                $template
+            );
+        }
+    }
+
+    public function test_the_create_form_explains_how_to_get_flavors_when_there_are_no_favorites(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $this->get(route('mixes.create'))
+            ->assertOk()
+            ->assertSee('Todavía no tienes favoritos')
+            ->assertSee('href="'.route('home').'"', false);
+    }
+
+    public function test_the_list_draws_the_composition_of_each_mix_with_its_brand(): void
+    {
+        $this->savedMix([$this->first->id => 70, $this->second->id => 30]);
+
+        $this->get(route('mixes.index'))
+            ->assertOk()
+            ->assertSee('flex-grow: 70', false)
+            ->assertSee('flex-grow: 30', false)
+            ->assertSee($this->first->brand->name);
+    }
+
     public function test_the_create_form_starts_with_one_empty_row_and_no_errors(): void
     {
         $response = $this->get(route('mixes.create'))->assertOk();

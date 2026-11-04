@@ -55,7 +55,14 @@
 
                             <div class="col-md-6">
                                 <label for="tobacco_type" class="form-label">Tipo de tabaco</label>
-                                <input type="text" name="tobacco_type" id="tobacco_type" class="form-control" value="{{ old('tobacco_type', $flavor->tobacco_type) }}">
+                                <select name="tobacco_type" id="tobacco_type" class="form-select">
+                                    <option value="">Sin especificar</option>
+                                    @foreach(\App\Models\Flavor::TOBACCO_TYPES as $type)
+                                        <option value="{{ $type }}"{{ old('tobacco_type', $flavor->tobacco_type) === $type ? ' selected' : '' }}>
+                                            {{ ucfirst(str_replace('_', ' ', $type)) }}
+                                        </option>
+                                    @endforeach
+                                </select>
                                 @error('tobacco_type')
                                     <div class="text-danger small mt-1">{{ $message }}</div>
                                 @enderror

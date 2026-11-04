@@ -20,15 +20,6 @@
                     Busca por marca, categoría, ingredientes o tipo de tabaco y guarda tus favoritos.
                 </p>
             </div>
-
-            <div class="hero-actions">
-                <a href="{{ route('favorites.index') }}" class="btn btn-light btn-modern">
-                    ♥ Ver favoritos
-                </a>
-                <a href="{{ route('mixes.index') }}" class="btn btn-outline-light btn-modern">
-                    Mezclas
-                </a>
-            </div>
         </div>
     </section>
 
@@ -351,12 +342,6 @@
         font-size: 1rem;
     }
 
-    .hero-actions {
-        display: flex;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-    }
-
     .btn-modern {
         border-radius: 999px;
         padding: 0.72rem 1.25rem;
@@ -669,54 +654,95 @@
         justify-content: center;
     }
 
-    .pagination-wrapper nav {
-        background: rgba(255,255,255,0.08);
-        padding: 0.9rem 1rem;
-        border-radius: 20px;
-        border: 1px solid rgba(255,255,255,0.12);
-        box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    .us-pagination {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        width: 100%;
     }
 
-    .pagination {
-        margin-bottom: 0;
-        gap: 0.35rem;
-        flex-wrap: wrap;
-        justify-content: center;
+    .us-pagination-summary {
+        margin: 0;
+        color: var(--us-text);
+        font-size: 0.88rem;
     }
 
-    .page-item .page-link {
-        border: none;
-        border-radius: 12px !important;
-        background: rgba(255,255,255,0.95);
-        color: #111827;
-        font-weight: 700;
-        padding: 0.65rem 0.9rem;
-        min-width: 42px;
-        text-align: center;
-        transition: all 0.2s ease;
+    .us-pagination-list {
         display: flex;
         align-items: center;
+        gap: 0.2rem;
+        max-width: 100%;
+        margin: 0;
+        padding: 0.3rem;
+        list-style: none;
+        background: var(--us-bar);
+        border: 1px solid var(--us-line);
+        border-radius: 999px;
+    }
+
+    .us-page {
+        display: inline-flex;
+        align-items: center;
         justify-content: center;
+        gap: 0.2rem;
+        min-width: 2.6rem;
+        height: 2.6rem;
+        padding: 0 0.5rem;
+        border-radius: 999px;
+        color: var(--us-text);
+        font-weight: 600;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: color 0.15s ease, background-color 0.15s ease;
     }
 
-    .page-item .page-link:hover {
-        background: #ffffff;
-        transform: translateY(-1px);
+    a.us-page:hover {
+        background: var(--us-hover);
+        color: var(--us-text-strong);
     }
 
-    .page-item.active .page-link {
+    a.us-page:focus-visible {
+        outline: 2px solid #f472b6;
+        outline-offset: 2px;
+    }
+
+    .us-page.is-current {
         background: linear-gradient(135deg, #8b5cf6, #ec4899);
-        color: #fff;
+        box-shadow: 0 0 14px rgba(236, 72, 153, 0.55);
+        color: var(--us-text-strong);
     }
 
-    .page-item.disabled .page-link {
-        background: rgba(255,255,255,0.45);
-        color: #6b7280;
+    .us-page.is-disabled {
+        opacity: 0.4;
     }
 
-    .pagination svg {
-        width: 1rem !important;
-        height: 1rem !important;
+    .us-page-step {
+        padding: 0 0.8rem;
+    }
+
+    .us-page-step svg {
+        width: 1rem;
+        height: 1rem;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .us-page-position {
+        padding: 0 0.35rem;
+        color: var(--us-text-strong);
+        font-size: 0.88rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .us-page {
+            transition: none;
+        }
     }
 
     @media (max-width: 991px) {
@@ -871,21 +897,6 @@
             text-overflow: unset;
             line-height: 1.5;
             border-radius: 16px;
-        }
-
-        .pagination-wrapper nav {
-            width: 100%;
-            padding: 0.75rem;
-        }
-
-        .pagination {
-            gap: 0.25rem;
-        }
-
-        .page-item .page-link {
-            padding: 0.55rem 0.75rem;
-            min-width: 38px;
-            font-size: 0.88rem;
         }
     }
 
