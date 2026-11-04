@@ -9,6 +9,16 @@
         <p class="text-light-emphasis">Combina sabores y crea tu mezcla perfecta.</p>
     </div>
 
+    @if($errors->any())
+    <div class="alert alert-danger rounded-4">
+        <ul class="mb-0">
+            @foreach(array_unique($errors->all()) as $error)
+            <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+    @endif
+
     <form action="{{ route('mixes.store') }}" method="POST">
         @csrf
 
@@ -20,16 +30,16 @@
 
                     <div class="mb-3">
                         <label class="form-label">Nombre</label>
-                        <input type="text" name="name" class="form-control" required>
+                        <input type="text" name="name" class="form-control" required value="{{ is_array(old('name')) ? '' : old('name') }}">
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Notas</label>
-                        <textarea name="notes" class="form-control" rows="3"></textarea>
+                        <textarea name="notes" class="form-control" rows="3">{{ is_array(old('notes')) ? '' : old('notes') }}</textarea>
                     </div>
 
                     <div class="form-check">
-                        <input type="checkbox" name="is_public" class="form-check-input" value="1">
+                        <input type="checkbox" name="is_public" class="form-check-input" value="1" {{ old('is_public') ? 'checked' : '' }}>
                         <label class="form-check-label">Hacer pública</label>
                     </div>
 
@@ -43,13 +53,14 @@
                     <h5 class="fw-bold mb-3">Selecciona sabores</h5>
 
                     <div id="flavor-list">
-                        {{-- FILA INICIAL --}}
+                        {{-- FILA INICIAL, O LAS QUE ESCRIBIÓ EL USUARIO SI SE RECHAZÓ --}}
+                        @foreach($rows as $row)
                         <div class="row g-2 align-items-center flavor-row mb-2">
                             <div class="col-md-6">
                                 <select name="flavors[]" class="form-select" required>
                                     <option value="">Selecciona sabor</option>
                                     @foreach($flavors as $flavor)
-                                        <option value="{{ $flavor->id }}">
+                                        <option value="{{ $flavor->id }}" @selected($row['flavor_id'] == $flavor->id)>
                                             {{ $flavor->name }} ({{ $flavor->brand->name ?? '-' }})
                                         </option>
                                     @endforeach
@@ -57,13 +68,14 @@
                             </div>
 
                             <div class="col-md-4">
-                                <input type="number" name="ratios[]" class="form-control" placeholder="%" min="1" max="100" required>
+                                <input type="number" name="ratios[]" class="form-control" placeholder="%" min="1" max="100" required value="{{ $row['ratio'] }}">
                             </div>
 
                             <div class="col-md-2">
                                 <button type="button" class="btn btn-danger w-100 remove-row">X</button>
                             </div>
                         </div>
+                        @endforeach
                     </div>
 
                     <button type="button" id="add-row" class="btn btn-outline-light mt-3">

@@ -78,7 +78,7 @@
                     @else
                     <div class="flavor-placeholder d-flex align-items-center justify-content-center">
                         <span class="placeholder-text">
-                            {{ strtoupper(substr($flavor->name, 0, 1)) }}
+                            {{ $flavor->initial }}
                         </span>
                     </div>
                     @endif
@@ -174,7 +174,7 @@
                         </div>
 
                         <div class="d-flex flex-wrap gap-2">
-                            <a href="{{ route('mixes.index') }}" class="btn btn-dark rounded-pill px-4">
+                            <a href="{{ route('mixes.create') }}" class="btn btn-dark rounded-pill px-4">
                                 Crear mezcla
                             </a>
                             <button type="button" class="btn btn-outline-secondary rounded-pill px-4" onclick="closeFlavorModal()">
@@ -368,7 +368,9 @@
         font-size: 0.78rem;
         font-weight: 700;
         padding: 0.48rem 0.75rem;
-        white-space: nowrap;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        min-width: 0;
     }
 
     .meta-list {

@@ -52,7 +52,7 @@
                                     >
                                 @else
                                 <div class="mix-flavor-placeholder">
-                                    {{ $item->flavor ? strtoupper(substr($item->flavor->name, 0, 1)) : '?' }}
+                                    {{ $item->flavor ? $item->flavor->initial : '?' }}
                                 </div>
                                 @endif
 

@@ -28,18 +28,23 @@ class CategoryController extends Controller {
                         ->with('success', 'Categoría creada correctamente.');
     }
 
+    // La ruta existe por Route::resource, pero admin no tiene página de detalle
+    public function show(Category $category) {
+        abort(404);
+    }
+
     public function edit(Category $category) {
         return view('admin.categories.edit', compact('category'));
     }
 
-    public function update(StoreCategoryRequestRequest $request, Category $category) {
+    public function update(StoreCategoryRequest $request, Category $category) {
         $category->update([
             'name' => $request->name,
         ]);
 
         return redirect()
                         ->route('admin.categories.index')
-                        ->with('success', 'Categoría creada correctamente.');
+                        ->with('success', 'Categoría actualizada correctamente.');
     }
 
     public function destroy(Category $category) {

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreCategoryRequest extends FormRequest
 {
@@ -14,7 +15,13 @@ class StoreCategoryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'required|string|max:255|unique:categories,name',
+            'name' => [
+                'bail',
+                'required',
+                'string',
+                'max:80',
+                Rule::unique('categories', 'name')->ignore($this->route('category')),
+            ],
         ];
     }
 
@@ -22,6 +29,8 @@ class StoreCategoryRequest extends FormRequest
     {
         return [
             'name.required' => 'El nombre de la categoría es obligatorio.',
+            'name.string' => 'El nombre de la categoría debe ser un texto.',
+            'name.max' => 'El nombre de la categoría no puede superar 80 caracteres.',
             'name.unique' => 'Esta categoría ya existe.',
         ];
     }

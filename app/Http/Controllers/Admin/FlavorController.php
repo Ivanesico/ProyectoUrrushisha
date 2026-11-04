@@ -70,6 +70,11 @@ class FlavorController extends Controller {
                         ->with('success', 'Sabor creado correctamente.');
     }
 
+    // La ruta existe por Route::resource, pero admin no tiene página de detalle
+    public function show(Flavor $flavor) {
+        abort(404);
+    }
+
     public function edit(Flavor $flavor) {
         $brands = Brand::orderBy('name')->get();
         $categories = Category::orderBy('name')->get();
@@ -102,6 +107,11 @@ class FlavorController extends Controller {
     }
 
     public function destroy(Flavor $flavor) {
+        if ($flavor->mixItems()->exists()) {
+            return redirect()
+                            ->route('admin.flavors.index')
+                            ->with('error', 'No se puede eliminar el sabor porque se usa en alguna mezcla.');
+        }
 
         $flavor->delete();
 

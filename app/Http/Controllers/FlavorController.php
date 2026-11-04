@@ -19,24 +19,38 @@ class FlavorController extends Controller {
         $query = Flavor::with(['brand', 'category'])
                 ->where('is_public', true);
 
-        if ($request->filled('brand_id')) {
-            $query->where('brand_id', $request->brand_id);
+        // Un valor no válido da 0 resultados y nunca llega a la consulta: Postgres lo rechazaría.
+        foreach (['brand_id', 'category_id'] as $column) {
+            if ($request->filled($column)) {
+                $id = filter_var($request->input($column), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+                if ($id === false) {
+                    $query->whereRaw('1 = 0');
+                } else {
+                    $query->where($column, $id);
+                }
+            }
         }
 
-        if ($request->filled('category_id')) {
-            $query->where('category_id', $request->category_id);
+        $textFilters = ['name' => 'name', 'ingredient' => 'ingredients_text', 'tobacco_type' => 'tobacco_type'];
+
+        foreach ($textFilters as $filter => $column) {
+            if ($request->filled($filter)) {
+                $term = $request->input($filter);
+
+                if (is_string($term)) {
+                    $query->matchingText($column, $term);
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            }
         }
 
-        if ($request->filled('name')) {
-            $query->where('name', 'like', '%' . $request->name . '%');
-        }
+        $filters = [];
 
-        if ($request->filled('ingredient')) {
-            $query->where('ingredients_text', 'like', '%' . $request->ingredient . '%');
-        }
-
-        if ($request->filled('tobacco_type')) {
-            $query->where('tobacco_type', 'like', '%' . $request->tobacco_type . '%');
+        foreach (['name', 'brand_id', 'category_id', 'ingredient', 'tobacco_type'] as $filter) {
+            $value = $request->input($filter);
+            $filters[$filter] = is_string($value) ? $value : '';
         }
 
         $flavors = $query->orderBy('name')->paginate(12)->withQueryString();
@@ -48,7 +62,7 @@ class FlavorController extends Controller {
         $brands = Brand::orderBy('name')->get();
         $categories = Category::orderBy('name')->get();
 
-        return view('index', compact('flavors', 'brands', 'categories', 'favoriteIds'));
+        return view('index', compact('flavors', 'brands', 'categories', 'favoriteIds', 'filters'));
     }
 
     /**

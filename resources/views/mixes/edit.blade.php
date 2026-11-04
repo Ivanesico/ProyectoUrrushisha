@@ -12,7 +12,7 @@
     @if($errors->any())
     <div class="alert alert-danger rounded-4">
         <ul class="mb-0">
-            @foreach($errors->all() as $error)
+            @foreach(array_unique($errors->all()) as $error)
             <li>{{ $error }}</li>
             @endforeach
         </ul>
@@ -28,16 +28,17 @@
                 <div class="card p-4 rounded-4 border-0 shadow-sm">
                     <div class="mb-3">
                         <label class="form-label">Nombre</label>
-                        <input type="text" name="name" class="form-control" required value="{{ old('name', $mix->name) }}">
+                        <input type="text" name="name" class="form-control" required value="{{ is_array(old('name')) ? '' : old('name', $mix->name) }}">
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Notas</label>
-                        <textarea name="notes" class="form-control" rows="3">{{ old('notes', $mix->notes) }}</textarea>
+                        <textarea name="notes" class="form-control" rows="3">{{ is_array(old('notes')) ? '' : old('notes', $mix->notes) }}</textarea>
                     </div>
 
                     <div class="form-check">
-                        <input type="checkbox" name="is_public" class="form-check-input" value="1" {{ old('is_public', $mix->is_public) ? 'checked' : '' }}>
+                        {{-- Tras un error no vale old() con valor por defecto: una casilla desmarcada no se envía y volvería a salir marcada --}}
+                        <input type="checkbox" name="is_public" class="form-check-input" value="1" {{ ($errors->any() ? old('is_public') : $mix->is_public) ? 'checked' : '' }}>
                         <label class="form-check-label">Hacer pública</label>
                     </div>
                 </div>
@@ -48,13 +49,13 @@
                     <h5 class="fw-bold mb-3">Sabores</h5>
 
                     <div id="flavor-list">
-                        @foreach($mix->items as $item)
+                        @foreach($rows as $row)
                         <div class="row g-2 align-items-center flavor-row mb-2">
                             <div class="col-md-6">
                                 <select name="flavors[]" class="form-select" required>
                                     <option value="">Selecciona sabor</option>
                                     @foreach($flavors as $flavor)
-                                    <option value="{{ $flavor->id }}" {{ $item->flavor_id == $flavor->id ? 'selected' : '' }}>
+                                    <option value="{{ $flavor->id }}" @selected($row['flavor_id'] == $flavor->id)>
                                         {{ $flavor->name }} ({{ $flavor->brand->name ?? '-' }})
                                     </option>
                                     @endforeach
@@ -62,7 +63,7 @@
                             </div>
 
                             <div class="col-md-4">
-                                <input type="number" name="ratios[]" class="form-control" placeholder="%" min="1" max="100" required value="{{ $item->ratio }}">
+                                <input type="number" name="ratios[]" class="form-control" placeholder="%" min="1" max="100" required value="{{ $row['ratio'] }}">
                             </div>
 
                             <div class="col-md-2">

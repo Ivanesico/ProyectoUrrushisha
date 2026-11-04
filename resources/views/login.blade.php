@@ -3,7 +3,7 @@
 @section('title', 'Login')
 
 @section('content')
-<div class="row justify-content-center mt-5">
+<div class="row justify-content-center mt-5 mx-0">
     <div class="col-md-4">
 
         
@@ -19,7 +19,7 @@
 
             <div class="mb-3 mt-2">
                 <label for="email" class="form-label">Correo electrónico</label>
-                <input type="email" class="form-control" id="email" name="email" required value="{{ old('email') }}">
+                <input type="email" class="form-control" id="email" name="email" required value="{{ is_string(old('email')) ? old('email') : '' }}">
             </div>
 
             <div class="mb-3">
@@ -45,10 +45,4 @@
         padding-top: 2.5rem;
     }
 </style>
-@endpush
-
-@push('scripts')
-
-@include('js.login')
-
 @endpush

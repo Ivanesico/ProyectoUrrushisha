@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use App\Http\Requests\StoreMixRequest;
+use Illuminate\Support\Facades\DB;
 use App\Models\Mix;
 use App\Models\Flavor;
 use App\Models\MixItem;
@@ -29,43 +29,22 @@ class MixController extends Controller {
                 ->orderBy('name')
                 ->get();
 
-        return view('mixes.create', compact('flavors'));
+        $rows = $this->rejectedRows() ?? $this->emptyRows();
+
+        return view('mixes.create', compact('flavors', 'rows'));
     }
 
-    public function store(Request $request) {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'notes' => 'nullable|string',
-            'flavors' => 'required|array|min:1',
-            'flavors.*' => 'required|exists:flavors,id',
-            'ratios' => 'required|array|min:1',
-            'ratios.*' => 'required|integer|min:1|max:100',
-                ], [
-            'name.required' => 'El nombre de la mezcla es obligatorio.',
-            'flavors.required' => 'Debes añadir al menos un sabor.',
-        ]);
-
-        $totalRatio = array_sum(array_map('intval', $request->ratios));
-        if ($totalRatio !== 100) {
-            return back()
-                            ->withErrors(['ratios' => 'La suma de los porcentajes debe ser exactamente 100%.'])
-                            ->withInput();
-        }
-
-        $mix = Mix::create([
-            'user_id' => auth()->id(),
-            'name' => $request->name,
-            'notes' => $request->notes,
-            'is_public' => $request->boolean('is_public'),
-        ]);
-
-        foreach ($request->flavors as $index => $flavorId) {
-            MixItem::create([
-                'mix_id' => $mix->id,
-                'flavor_id' => $flavorId,
-                'ratio' => $request->ratios[$index],
+    public function store(StoreMixRequest $request) {
+        DB::transaction(function () use ($request) {
+            $mix = Mix::create([
+                'user_id' => auth()->id(),
+                'name' => $request->validated('name'),
+                'notes' => $request->validated('notes'),
+                'is_public' => $request->boolean('is_public'),
             ]);
-        }
+
+            $this->saveItems($mix, $request);
+        });
 
         return redirect()->route('mixes.index')->with('success', 'Mezcla creada correctamente.');
     }
@@ -75,53 +54,36 @@ class MixController extends Controller {
             abort(403);
         }
         $mix->load('items');
+        // Los favoritos más los sabores ya presentes, aunque hayan dejado de ser favoritos
         $flavors = Flavor::whereIn('id', function ($query) {
                     $query->select('flavor_id')
                             ->from('favorites')
                             ->where('user_id', auth()->id());
                 })
+                ->orWhereIn('id', $mix->items->pluck('flavor_id'))
                 ->with('brand')
                 ->orderBy('name')
                 ->get();
-        return view('mixes.edit', compact('mix', 'flavors'));
+
+        $rows = $this->rejectedRows() ?? $mix->items
+                ->map(fn ($item) => ['flavor_id' => $item->flavor_id, 'ratio' => $item->ratio])
+                ->all();
+
+        return view('mixes.edit', compact('mix', 'flavors', 'rows'));
     }
 
-    public function update(Request $request, Mix $mix) {
-        if ($mix->user_id !== auth()->id()) {
-            abort(403);
-        }
-
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'notes' => 'nullable|string',
-            'flavors' => 'required|array|min:1',
-            'flavors.*' => 'required|exists:flavors,id',
-            'ratios' => 'required|array|min:1',
-            'ratios.*' => 'required|integer|min:1|max:100',
-        ]);
-
-        $totalRatio = array_sum(array_map('intval', $request->ratios));
-        if ($totalRatio !== 100) {
-            return back()
-                            ->withErrors(['ratios' => 'La suma de los porcentajes debe ser exactamente 100%.'])
-                            ->withInput();
-        }
-
-        $mix->update([
-            'name' => $request->name,
-            'notes' => $request->notes,
-            'is_public' => $request->boolean('is_public'),
-        ]);
-
-        MixItem::where('mix_id', $mix->id)->delete();
-
-        foreach ($request->flavors as $index => $flavorId) {
-            MixItem::create([
-                'mix_id' => $mix->id,
-                'flavor_id' => $flavorId,
-                'ratio' => $request->ratios[$index],
+    public function update(StoreMixRequest $request, Mix $mix) {
+        DB::transaction(function () use ($request, $mix) {
+            $mix->update([
+                'name' => $request->validated('name'),
+                'notes' => $request->validated('notes'),
+                'is_public' => $request->boolean('is_public'),
             ]);
-        }
+
+            MixItem::where('mix_id', $mix->id)->delete();
+
+            $this->saveItems($mix, $request);
+        });
 
         return redirect()->route('mixes.index')->with('success', 'Mezcla actualizada correctamente.');
     }
@@ -135,5 +97,47 @@ class MixController extends Controller {
         $mix->delete();
 
         return redirect()->route('mixes.index')->with('success', 'Mezcla eliminada correctamente.');
+    }
+
+    private function saveItems(Mix $mix, StoreMixRequest $request): void {
+        $ratios = $request->validated('ratios');
+
+        foreach ($request->validated('flavors') as $index => $flavorId) {
+            MixItem::create([
+                'mix_id' => $mix->id,
+                'flavor_id' => $flavorId,
+                'ratio' => (int) $ratios[$index],
+            ]);
+        }
+    }
+
+    /**
+     * Las filas que escribió el usuario si se rechazó el formulario; null si no hay rechazo.
+     * Lo que no sea un valor simple se pinta vacío, porque Blade no puede mostrar un array.
+     */
+    private function rejectedRows(): ?array {
+        if (!session()->has('errors')) {
+            return null;
+        }
+
+        $flavors = is_array(old('flavors')) ? old('flavors') : [];
+        $ratios = is_array(old('ratios')) ? old('ratios') : [];
+        $rows = [];
+
+        foreach (array_keys($flavors + $ratios) as $key) {
+            $flavorId = $flavors[$key] ?? '';
+            $ratio = $ratios[$key] ?? '';
+
+            $rows[] = [
+                'flavor_id' => is_scalar($flavorId) ? $flavorId : '',
+                'ratio' => is_scalar($ratio) ? $ratio : '',
+            ];
+        }
+
+        return $rows ?: $this->emptyRows();
+    }
+
+    private function emptyRows(): array {
+        return [['flavor_id' => '', 'ratio' => '']];
     }
 }

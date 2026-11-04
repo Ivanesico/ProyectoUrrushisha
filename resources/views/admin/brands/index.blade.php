@@ -8,6 +8,10 @@
     <div class="alert alert-success">{{ session('success') }}</div>
     @endif
 
+    @if(session('error'))
+    <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 fw-bold mb-0">Marcas</h1>
         <a href="{{ route('admin.brands.create') }}" class="btn btn-dark">Añadir marca</a>

@@ -28,6 +28,11 @@ class BrandController extends Controller {
                         ->with('success', 'Marca creada correctamente.');
     }
 
+    // La ruta existe por Route::resource, pero admin no tiene página de detalle
+    public function show(Brand $brand) {
+        abort(404);
+    }
+
     public function edit(Brand $brand) {
         return view('admin.brands.edit', compact('brand'));
     }
@@ -39,10 +44,15 @@ class BrandController extends Controller {
 
         return redirect()
                         ->route('admin.brands.index')
-                        ->with('success', 'Marca creada correctamente.');
+                        ->with('success', 'Marca actualizada correctamente.');
     }
 
     public function destroy(Brand $brand) {
+        if ($brand->flavors()->exists()) {
+            return redirect()
+                            ->route('admin.brands.index')
+                            ->with('error', 'No se puede eliminar la marca porque tiene sabores asociados.');
+        }
 
         $brand->delete();
 

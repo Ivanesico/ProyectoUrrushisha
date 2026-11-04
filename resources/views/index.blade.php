@@ -57,7 +57,7 @@
                         name="name"
                         id="name"
                         class="form-control form-control-modern"
-                        value="{{ request('name') }}"
+                        value="{{ $filters['name'] }}"
                         placeholder="Ej. Blue Toteta"
                         >
                 </div>
@@ -67,7 +67,7 @@
                     <select name="brand_id" id="brand_id" class="form-select form-control-modern">
                         <option value="">Todas las marcas</option>
                         @foreach($brands as $brand)
-                        <option value="{{ $brand->id }}" {{ request('brand_id') == $brand->id ? 'selected' : '' }}>
+                        <option value="{{ $brand->id }}" {{ $filters['brand_id'] === (string) $brand->id ? 'selected' : '' }}>
                             {{ $brand->name }}
                         </option>
                         @endforeach
@@ -79,7 +79,7 @@
                     <select name="category_id" id="category_id" class="form-select form-control-modern">
                         <option value="">Todas</option>
                         @foreach($categories as $category)
-                        <option value="{{ $category->id }}" {{ request('category_id') == $category->id ? 'selected' : '' }}>
+                        <option value="{{ $category->id }}" {{ $filters['category_id'] === (string) $category->id ? 'selected' : '' }}>
                             {{ $category->name }}
                         </option>
                         @endforeach
@@ -93,7 +93,7 @@
                         name="ingredient"
                         id="ingredient"
                         class="form-control form-control-modern"
-                        value="{{ request('ingredient') }}"
+                        value="{{ $filters['ingredient'] }}"
                         placeholder="Arándano"
                         >
                 </div>
@@ -105,8 +105,8 @@
                         name="tobacco_type"
                         id="tobacco_type"
                         class="form-control form-control-modern"
-                        value="{{ request('tobacco_type') }}"
-                        placeholder="Virginia"
+                        value="{{ $filters['tobacco_type'] }}"
+                        placeholder="Ej. rubio"
                         >
                 </div>
 
@@ -164,7 +164,7 @@
                     @else
                     <div class="flavor-placeholder d-flex align-items-center justify-content-center">
                         <span class="placeholder-text">
-                            {{ strtoupper(substr($flavor->name, 0, 1)) }}
+                            {{ $flavor->initial }}
                         </span>
                     </div>
                     @endif
@@ -263,7 +263,7 @@
                         </div>
 
                         <div class="d-flex flex-wrap gap-2">
-                            <a href="{{ route('mixes.index') }}" class="btn btn-dark rounded-pill px-4">
+                            <a href="{{ route('mixes.create') }}" class="btn btn-dark rounded-pill px-4">
                                 Crear mezcla
                             </a>
                             <button type="button" class="btn btn-outline-secondary rounded-pill px-4" onclick="closeFlavorModal()">
@@ -517,7 +517,9 @@
         font-size: 0.78rem;
         font-weight: 700;
         padding: 0.48rem 0.75rem;
-        white-space: nowrap;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        min-width: 0;
     }
 
     .meta-list,

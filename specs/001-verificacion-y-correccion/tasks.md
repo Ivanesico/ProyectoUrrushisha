@@ -1,0 +1,134 @@
+# Tareas — Spec 001: Verificación de la aplicación y corrección de errores
+
+**Para cada tarea** (cada una la ejecuta un implementer nuevo):
+- Lee `spec.md` (el texto completo de los RF indicados y "Cómo se escriben los tests") y la sección del `plan.md` indicada.
+- Crea o modifica solo los archivos listados. Si necesitas otro, para y explícalo.
+- **Tests primero**: los de corrección se ven en rojo antes de corregir. Los de caracterización pueden nacer en verde. Si uno de corrección nace en verde, no lo fuerces: compruébalo, indícalo y sigue. Si uno de caracterización falla, aplica "Tratamiento de los errores que se destapen" de la spec.
+- La tarea solo termina con `php artisan test` en verde en toda la suite, y deja el checklist de Postgres revisado.
+- No ejecutes migraciones ni seeders sobre el MySQL local (los tests usan SQLite en memoria). No hagas commit ni actualices `MEMORY.md`.
+
+---
+
+- [x] **T1. Revertir la migración original; migración de `tobacco_type`, factories y seeders.** RF-7 (test de ejemplo), RF-50, RF-51 ([T] y rama de Postgres), RF-52, RF-53, RF-56, RF-57, RF-65, RF-66
+  - **Paso previo obligatorio, antes de tocar nada:**
+    1. Ejecuta `git diff -- database/migrations/2026_03_05_175025_create_flavors_table.php`.
+    2. Si el **único** cambio es añadir `'rojo'` en la línea del `enum` de `tobacco_type`, revierte solo ese archivo con `git restore -- database/migrations/2026_03_05_175025_create_flavors_table.php`. Es la excepción expresa de la spec, autorizada por el usuario.
+    3. Si hay cualquier otro cambio, **no reviertas: para y avisa**.
+  - **Plan:** secciones 3 y 8.
+  - **Archivos nuevos:**
+    - `database/migrations/2026_11_03_000000_add_rojo_to_flavors_tobacco_type.php`
+    - `database/seeders/LocalTestUsersSeeder.php` (copia exacta de `.claude/database/seeders/LocalTestUsersSeeder.php`)
+    - `database/seeders/LocalTestDataSeeder.php`
+    - `database/factories/BrandFactory.php`, `CategoryFactory.php`, `FlavorFactory.php`, `MixFactory.php`
+    - `tests/Feature/TobaccoTypeMigrationTest.php`, `tests/Feature/LocalSeedersTest.php`
+  - **Archivos modificados:**
+    - `tests/Feature/ExampleTest.php`: la aserción espera la redirección al login, sin ningún otro cambio.
+    - `app/Models/Brand.php`, `Category.php`, `Flavor.php`, `Mix.php`: `HasFactory`.
+    - `app/Models/Flavor.php`: además, la constante `TOBACCO_TYPES` con los 5 valores.
+  - **Puntos críticos:**
+    - La rama `pgsql` obtiene el nombre desde `pg_constraint`, no usa `IF EXISTS`, se comprueba a sí misma y mantiene `$withinTransaction` por defecto.
+    - `TobaccoTypeMigrationTest` no usa `RefreshDatabase`. Su `setUp()` debe fallar si el driver no es `sqlite` con `:memory:`, antes de ejecutar nada.
+    - Sus filas de prueba incluyen favoritos y sabores de mezcla.
+    - El texto de la reversión es exacto: `No se puede revertir: hay N sabores con tipo de tabaco rojo`.
+    - No hay ninguna rama `$table->enum` sin `->nullable()`.
+  - **Hecho cuando:**
+    - `git status` no muestra la migración original, y `git diff HEAD` no muestra cambios en ella.
+    - El test de `rojo` falla sin la migración nueva y pasa con ella.
+    - Los tests de RF-51 y RF-52 comparan todas las filas de sabores, favoritos, mezclas y sabores de mezcla.
+    - `php artisan test` queda en verde, con `ExampleTest` corregido.
+
+- [x] **T2. Acceso, páginas de error en español e ids en la URL.** RF-1 a RF-9; RF-54 y RF-60 (filas de Login y Registro); RF-55 (URL); RF-60 y RF-62
+  - **Plan:** secciones 2, 4 y 5.
+  - **Archivos nuevos:**
+    - `resources/views/errors/403.blade.php`, `resources/views/errors/404.blade.php`
+    - `tests/Feature/AuthTest.php`, `tests/Feature/ErrorPagesTest.php`
+  - **Archivos modificados:**
+    - `routes/web.php`: `Route::pattern` para `mix`, `flavor`, `brand`, `category` con `[1-9][0-9]{0,17}`, antes de cualquier ruta.
+    - `app/Http/Requests/LoginRequest.php`, `RegisterRequest.php`: mensajes de la tabla de RF-54.
+    - `resources/views/login.blade.php`: quita el `@include('js.login')`. No borres `resources/views/js/login.blade.php`.
+    - `resources/views/register.blade.php`: muestra errores y conserva nombre y email.
+  - **Puntos críticos:**
+    - Las páginas de error se ven con y sin sesión, también en una URL sin ninguna ruta.
+    - No crees otras páginas de error. "Login" y "Logout" se quedan en inglés.
+    - RF-55: comprueba con `DB::listen` que `abc` y `99999999999999999999` no llegan como parámetro a una consulta, en `/mixes/{x}/edit`, `/favorites/{x}`, `/brands/{x}` y `/admin/brands/{x}/edit`.
+  - **Hecho cuando:**
+    - Todos los RF de la tarea tienen su test, también el caso contrario cuando aplique.
+    - Los tests pasan con el idioma de la aplicación en `en`.
+    - `php artisan test` queda en verde.
+
+- [x] **T3. Catálogo con buscador sin acentos, marcas públicas y favoritos.** RF-10, RF-11, RF-12, RF-12b, RF-12c, RF-12d, RF-12e, RF-13, RF-14, RF-15, RF-16 a RF-19, RF-61, RF-63, RF-60 (paginación)
+  - **Plan:** secciones 4 (Buscador y Filtros) y 5.
+  - **Archivos nuevos:**
+    - `resources/views/brands/show.blade.php`
+    - `resources/views/vendor/pagination/bootstrap-5.blade.php`
+    - `tests/Feature/CatalogTest.php`, `tests/Feature/BrandTest.php`, `tests/Feature/FavoriteTest.php`
+  - **Archivos modificados:**
+    - `app/Http/Controllers/FlavorController.php`: solo `index`; no toques los métodos vacíos.
+    - `app/Models/Flavor.php`: scope de búsqueda, normalización y atributo `initial`.
+    - `resources/views/index.blade.php`: `$filters`, placeholder válido, inicial, "Crear mezcla" a `mixes.create`.
+    - `resources/views/favorites/index.blade.php`: inicial, "Crear mezcla" a `mixes.create`.
+    - `resources/views/brands/index.blade.php`: listado con enlace al detalle.
+    - `resources/views/mixes/index.blade.php`: inicial.
+  - **Puntos críticos:**
+    - El mapa de sustitución es único para PHP y SQL, con las 14 letras: `á é í ó ú ü ñ` y sus mayúsculas.
+    - No uses `ilike`, `whereLike`, `unaccent` ni `translate`. Las columnas salen de una lista fija.
+    - `arandano`, `ARANDANO`, `Arándano` y `ÁRÁNDANO` encuentran `Arándano`. `pina`, `PIÑA` y `piña` encuentran `Piña`.
+    - RF-12b: id no válido da 0 resultados, y `DB::listen` comprueba que el valor no llega a la consulta.
+    - RF-12e: `name[]=x` no debe fallar tampoco al pintar el formulario.
+    - Ninguna pantalla existente enlaza con las de marcas.
+    - `FavoriteController` no necesita cambios previstos: RF-16 a RF-19 son de caracterización.
+  - **Hecho cuando:**
+    - Todos los RF con [T] de la tarea tienen test, incluidos los ejemplos anteriores en nombre, ingrediente y tipo.
+    - La paginación con más de 12 sabores no contiene "Showing", "Previous" ni "Next", con el idioma en `en`.
+    - `php artisan test` queda en verde.
+
+- [x] **T4. Mezclas: validación, guardado atómico y formularios.** RF-20 a RF-34, RF-58, RF-59; RF-54, RF-55 y RF-60 (filas y campos de Mezcla)
+  - **Plan:** secciones 4 (`StoreMixRequest` y `MixController`) y 5.
+  - **Archivos nuevos:**
+    - `app/Http/Requests/StoreMixRequest.php`
+    - `tests/Feature/MixTest.php`
+  - **Archivos modificados:**
+    - `app/Http/Controllers/MixController.php`
+    - `app/Models/MixItem.php`: cast `ratio` a `integer`.
+    - `resources/views/mixes/create.blade.php`, `resources/views/mixes/edit.blade.php`
+  - **Puntos críticos:**
+    - `flavors.*` lleva `bail`, para que `exists` no consulte valores no válidos.
+    - `authorize()` da 403 antes que la validación en mezclas ajenas.
+    - Las comprobaciones de `after()` cubren `flavors[0]` con `ratios[5]`, la suma de 100 y los favoritos o sabores ya presentes.
+    - Sabor ya presente: es el que está guardado en la mezcla al iniciar la edición. `edit` lo ofrece en sus filas y en la plantilla de fila nueva.
+    - La casilla pública de `edit` usa `$errors->any() ? old('is_public') : $mix->is_public`.
+    - RF-29: fuerza una excepción al crear el segundo `MixItem`, al crear y al editar.
+    - RF-30 no se reproduce en SQLite: no se exige rojo; se valida en el navegador.
+    - No toques `mix_items.role`.
+  - **Hecho cuando:**
+    - Todos los RF con [T] de la tarea tienen test, con los valores concretos de RF-21 (0, 101, negativo, 50.5, suma 99 y 101).
+    - El guardado rechazado deja intactos la mezcla y sus sabores.
+    - `MixController` ya no contiene reglas de validación.
+    - `php artisan test` queda en verde.
+
+- [x] **T5. Administración: acceso, CRUD, validación e imágenes.** RF-35 a RF-49, RF-64, RF-68; RF-54, RF-55 y RF-60 (filas de Marca, Categoría y Sabor)
+  - **Plan:** secciones 2 (RF-37), 4 (Form Requests y controladores de admin), 5 (casilla de RF-68) y 8 (imágenes sin GD y los 13 omitidos). En la spec, lee también "Excepciones expresas".
+  - **Archivos nuevos:**
+    - `tests/Feature/AdminAccessTest.php`, `tests/Feature/AdminBrandCategoryTest.php`, `tests/Feature/AdminFlavorTest.php`
+  - **Archivos modificados:**
+    - `app/Http/Controllers/Admin/BrandController.php`, `Admin/CategoryController.php`, `Admin/FlavorController.php`
+    - `app/Http/Requests/StoreBrandRequest.php`, `StoreCategoryRequest.php`, `StoreFlavorRequest.php`
+    - `resources/views/admin/brands/index.blade.php`, `resources/views/admin/flavors/index.blade.php`: muestran `session('error')`.
+    - `resources/views/admin/categories/index.blade.php`: usa `$category` en vez de `$flavor`.
+    - `resources/views/admin/flavors/edit.blade.php`: solo la casilla pública, con `$errors->any() ? old('is_public') : $flavor->is_public`.
+  - **Puntos críticos:**
+    - RF-37: mantén `show` en las rutas y responde `abort(404)` en el controlador. `->except('show')` daría 405.
+    - `Admin/CategoryController.php:35`: `StoreCategoryRequestRequest` pasa a `StoreCategoryRequest`.
+    - La regla de `image` pasa de `messages()` a `rules()`; se quita `image_url`.
+    - `brand_id` y `category_id` llevan `bail|required|integer|min:1|exists`.
+    - **No uses `UploadedFile::fake()->image()`**: GD está desactivado y no se activa. Sigue la sección 8 del plan.
+    - No cambies cómo se guardan las imágenes ni borres archivos de imagen.
+    - **No corrijas los errores A y B de "Excepciones expresas"** (array en un campo de texto; error de `is_public` no visible).
+    - **No toques** `create` ni `edit` de marcas y categorías, ni `admin/flavors/create`. En `admin/flavors/edit` solo se toca la casilla.
+    - **Omisión caso por caso**: marca con `markTestSkipped` y el motivo solo los casos de la tabla de 13 de la sección 8 del plan, sin cambiar sus aserciones. No omitas un método entero si tiene otros casos: esos se siguen ejecutando.
+  - **Hecho cuando:**
+    - `AdminAccessTest` recorre todas las rutas y métodos de administración con usuario sin permisos (403) y sin sesión (login).
+    - Los borrados bloqueados conservan la marca, el sabor y sus favoritos, y el mensaje se ve en la pantalla.
+    - Cada fila de Marca, Categoría y Sabor de RF-54 tiene su caso, con el idioma en `en`.
+    - RF-68 tiene su test, que se ve en rojo antes de corregir.
+    - `php artisan test` termina con 0 fallidos y exactamente los 13 omitidos de la sección 8 del plan, cada uno con su motivo. Cualquier otro test omitido es un fallo.

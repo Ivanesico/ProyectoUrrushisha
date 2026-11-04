@@ -31,10 +31,10 @@
                         <td>{{ $category->id }}</td>
                         <td>{{ $category->name }}</td>
                         <td>
-                            <a href="{{ route('admin.categories.edit', $flavor) }}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">Editar</a>
+                            <a href="{{ route('admin.categories.edit', $category) }}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">Editar</a>
                         </td>
                         <td>
-                            <form action="{{ route('admin.categories.destroy', $flavor) }}" method="POST" onsubmit="return confirm('¿Seguro que quieres eliminar esta categoría?')">
+                            <form action="{{ route('admin.categories.destroy', $category) }}" method="POST" onsubmit="return confirm('¿Seguro que quieres eliminar esta categoría?')">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn btn-sm btn-danger rounded-pill px-3">Eliminar</button>

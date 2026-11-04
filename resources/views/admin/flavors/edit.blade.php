@@ -94,7 +94,7 @@
 
                             <div class="col-12">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="is_public" id="is_public" value="1" {{ old('is_public', $flavor->is_public) ? 'checked' : '' }}>
+                                    <input class="form-check-input" type="checkbox" name="is_public" id="is_public" value="1" {{ ($errors->any() ? old('is_public') : $flavor->is_public) ? 'checked' : '' }}>
                                     <label class="form-check-label" for="is_public">
                                         Hacer público
                                     </label>

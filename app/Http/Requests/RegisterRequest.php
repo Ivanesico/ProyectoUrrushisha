@@ -29,13 +29,17 @@ class RegisterRequest extends FormRequest {
     public function messages(): array {
         return [
             'name.required' => 'El nombre es obligatorio.',
+            'name.string' => 'El nombre debe ser un texto.',
+            'name.max' => 'El nombre no puede superar los 255 caracteres.',
             'email.required' => 'El email es obligatorio.',
+            'email.string' => 'El email debe ser un texto.',
             'email.email' => 'El email debe ser válido.',
+            'email.max' => 'El email no puede superar los 255 caracteres.',
             'email.unique' => 'Este email ya está registrado.',
             'password.required' => 'La contraseña es obligatoria.',
+            'password.string' => 'La contraseña debe ser un texto.',
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
             'password.confirmed' => 'Las contraseñas no coinciden.',
-            
         ];
     }
 }

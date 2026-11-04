@@ -3,24 +3,33 @@
 @section('title', 'Registrarse')
 
 @section('content')
-<div class="row justify-content-center mt-5">
+<div class="row justify-content-center mt-5 mx-0">
     <div class="col-md-4">
 
         <div class="mb-5 d-flex justify-content-center text-white">
             @include('svg.logo', ['width' => 400])
         </div>
 
+        @if($errors->any())
+        <div class="alert alert-danger">
+            <ul class="mb-0">
+                @foreach($errors->all() as $error)
+                <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+        @endif
 
         <form action="{{ route('auth.register') }}" method="POST">
             @csrf
             <div class="mb-3 mt-2">
                 <label for="name" class="form-label">Nombre</label>
-                <input type="text" class="form-control" id="name" name="name" required>
+                <input type="text" class="form-control" id="name" name="name" required value="{{ is_string(old('name')) ? old('name') : '' }}">
             </div>
 
             <div class="mb-3">
                 <label for="email" class="form-label">Correo electrónico</label>
-                <input type="email" class="form-control" id="email" name="email" required>
+                <input type="email" class="form-control" id="email" name="email" required value="{{ is_string(old('email')) ? old('email') : '' }}">
             </div>
 
             <div class="mb-3">

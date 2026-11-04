@@ -1,0 +1,118 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Brand;
+use App\Models\Flavor;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class BrandTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['app.locale' => 'en']);
+        app()->setLocale('en');
+    }
+
+    // RF-13
+    public function test_it_lists_all_the_brands_ordered_by_name(): void
+    {
+        foreach (['Tangiers', 'Al Fakher', 'Mazaya'] as $name) {
+            Brand::factory()->create(['name' => $name]);
+        }
+
+        $response = $this->actingAs(User::factory()->create())->get(route('brands.index'));
+
+        $response->assertOk();
+        $response->assertSeeInOrder(['Al Fakher', 'Mazaya', 'Tangiers']);
+    }
+
+    public function test_each_brand_links_to_its_detail(): void
+    {
+        $brands = Brand::factory()->count(2)->create();
+
+        $response = $this->actingAs(User::factory()->create())->get(route('brands.index'));
+
+        foreach ($brands as $brand) {
+            $response->assertSee('href="'.route('brands.show', $brand).'"', false);
+        }
+    }
+
+    public function test_the_list_shows_a_message_when_there_are_no_brands(): void
+    {
+        $response = $this->actingAs(User::factory()->create())->get(route('brands.index'));
+
+        $response->assertOk();
+        $response->assertSee('No hay marcas disponibles');
+    }
+
+    public function test_the_list_requires_a_session(): void
+    {
+        $this->get(route('brands.index'))->assertRedirect(route('login'));
+    }
+
+    // RF-14
+    public function test_the_detail_shows_the_name_and_only_its_public_flavors(): void
+    {
+        $brand = Brand::factory()->create(['name' => 'Al Fakher']);
+        Flavor::factory()->create(['name' => 'Sabor público', 'brand_id' => $brand->id]);
+        Flavor::factory()->notPublic()->create(['name' => 'Sabor oculto', 'brand_id' => $brand->id]);
+        Flavor::factory()->create(['name' => 'Sabor de otra marca']);
+
+        $response = $this->actingAs(User::factory()->create())->get(route('brands.show', $brand));
+
+        $response->assertOk();
+        $response->assertSee('Al Fakher');
+        $response->assertSee('Sabor público');
+        $response->assertDontSee('Sabor oculto');
+        $response->assertDontSee('Sabor de otra marca');
+    }
+
+    public function test_the_detail_shows_a_message_when_the_brand_has_no_public_flavors(): void
+    {
+        $brand = Brand::factory()->create();
+        Flavor::factory()->notPublic()->create(['brand_id' => $brand->id]);
+
+        $response = $this->actingAs(User::factory()->create())->get(route('brands.show', $brand));
+
+        $response->assertOk();
+        $response->assertSee('Esta marca no tiene sabores disponibles');
+    }
+
+    public function test_a_flavor_without_category_and_type_does_not_break_the_detail(): void
+    {
+        $brand = Brand::factory()->create();
+        Flavor::factory()->create([
+            'name' => 'Sabor incompleto',
+            'brand_id' => $brand->id,
+            'category_id' => null,
+            'tobacco_type' => null,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->get(route('brands.show', $brand));
+
+        $response->assertOk();
+        $response->assertSee('Sabor incompleto');
+    }
+
+    public function test_a_nonexistent_brand_responds_404(): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->get('/brands/999999')
+            ->assertNotFound()
+            ->assertSee('Página no encontrada');
+    }
+
+    public function test_the_detail_requires_a_session(): void
+    {
+        $brand = Brand::factory()->create();
+
+        $this->get(route('brands.show', $brand))->assertRedirect(route('login'));
+    }
+}

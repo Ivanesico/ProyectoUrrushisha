@@ -14,6 +14,12 @@ use App\Http\Controllers\Admin\BrandController as AdminBrandController;
 use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Admin\FlavorController as AdminFlavorController;
 
+// Un id que no sea un entero positivo de hasta 18 dígitos responde 404 sin llegar a la base de datos
+Route::pattern('mix', '[1-9][0-9]{0,17}');
+Route::pattern('flavor', '[1-9][0-9]{0,17}');
+Route::pattern('brand', '[1-9][0-9]{0,17}');
+Route::pattern('category', '[1-9][0-9]{0,17}');
+
 // Públicas (solo para no logueados)
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'index'])->name('login');

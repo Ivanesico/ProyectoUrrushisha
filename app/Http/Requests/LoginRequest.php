@@ -30,6 +30,7 @@ class LoginRequest extends FormRequest {
             'email.required' => 'El email es obligatorio.',
             'email.email' => 'El email debe ser válido.',
             'password.required' => 'La contraseña es obligatoria.',
+            'password.string' => 'La contraseña debe ser un texto.',
         ];
     }
 }

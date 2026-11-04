@@ -18,6 +18,7 @@ class MixItem extends Model
     ];
 
     protected $casts = [
+        'ratio' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
