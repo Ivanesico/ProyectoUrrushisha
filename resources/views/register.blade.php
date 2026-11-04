@@ -34,12 +34,22 @@
 
             <div class="mb-3">
                 <label for="password" class="form-label">Contraseña</label>
-                <input type="password" class="form-control" id="password" name="password" required>
+                <div class="input-group">
+                    <input type="password" class="form-control" id="password" name="password" required>
+                    <button type="button" class="btn us-password-toggle" data-password-toggle="password" aria-label="Mostrar contraseña" aria-pressed="false" hidden>
+                        <svg class="us-icon" aria-hidden="true"><use href="#us-icon-eye"></use></svg>
+                    </button>
+                </div>
             </div>
 
             <div class="mb-3">
                 <label for="password_confirmation" class="form-label">Confirmar contraseña</label>
-                <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" required>
+                <div class="input-group">
+                    <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" required>
+                    <button type="button" class="btn us-password-toggle" data-password-toggle="password_confirmation" aria-label="Mostrar contraseña" aria-pressed="false" hidden>
+                        <svg class="us-icon" aria-hidden="true"><use href="#us-icon-eye"></use></svg>
+                    </button>
+                </div>
             </div>
 
             <button type="submit" class="btn auth-submit w-100 mt-3" id="submitBtn">Registrarse</button>

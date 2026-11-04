@@ -217,6 +217,19 @@
                 box-shadow: 0 0 12px rgba(236, 72, 153, 0.75);
             }
 
+            .us-password-toggle {
+                border: 1px solid var(--bs-border-color);
+                background: transparent;
+                color: var(--us-text);
+            }
+
+            .us-password-toggle:hover,
+            .us-password-toggle[aria-pressed="true"] {
+                background: var(--us-hover);
+                color: var(--us-text-strong);
+            }
+
+            .us-password-toggle:focus-visible,
             .us-link:focus-visible,
             .us-tab:focus-visible,
             .us-brand:focus-visible,
@@ -327,6 +340,13 @@
         </header>
         @endif
 
+        @if (request()->routeIs('login','register'))
+        <svg width="0" height="0" class="position-absolute" aria-hidden="true">
+            <symbol id="us-icon-eye" viewBox="0 0 24 24"><path d="M2 12s3.600-7 10-7 10 7 10 7-3.600 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+            <symbol id="us-icon-eye-off" viewBox="0 0 24 24"><path d="M9.900 5.200A9.800 9.800 0 0 1 12 5c6.400 0 10 7 10 7a17.500 17.500 0 0 1-3.200 4.100M6.500 6.600A17.200 17.200 0 0 0 2 12s3.600 7 10 7a9.800 9.800 0 0 0 5.400-1.600M3 3l18 18M9.900 9.900a3 3 0 0 0 4.200 4.200"/></symbol>
+        </svg>
+        @endif
+
         {{-- CONTENIDO --}}
         <main class="flex-grow-1 py-4 @auth us-has-tabbar @endauth">
             @yield('content')
@@ -343,6 +363,28 @@
             @endforeach
         </nav>
         @endauth
+
+        @if (request()->routeIs('login','register'))
+        <script>
+            document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+                const input = document.getElementById(button.dataset.passwordToggle);
+                const icon = button.querySelector('use');
+
+                const setVisible = (visible) => {
+                    input.type = visible ? 'text' : 'password';
+                    icon.setAttribute('href', visible ? '#us-icon-eye-off' : '#us-icon-eye');
+                    button.setAttribute('aria-label', visible ? 'Ocultar contraseña' : 'Mostrar contraseña');
+                    button.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                };
+
+                // Sin JavaScript el botón no serviría de nada, así que solo se muestra aquí.
+                button.hidden = false;
+                button.addEventListener('click', () => setVisible(input.type === 'password'));
+                // Se vuelve a ocultar al enviar, para que el navegador no la guarde como texto.
+                input.form.addEventListener('submit', () => setVisible(false));
+            });
+        </script>
+        @endif
 
         {{-- SCRIPTS --}}
         @stack('scripts')

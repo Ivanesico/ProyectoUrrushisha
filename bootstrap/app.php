@@ -11,6 +11,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Railway recibe el HTTPS en su proxy y reenvía la petición por HTTP: sin esto,
+        // las URL se generan con http:// y el navegador avisa de que el formulario no es seguro.
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
         ]);

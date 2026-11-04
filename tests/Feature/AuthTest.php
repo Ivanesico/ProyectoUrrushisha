@@ -216,6 +216,31 @@ class AuthTest extends TestCase
     }
 
     // RF-9
+    public function test_password_fields_have_a_button_to_show_them_and_start_hidden(): void
+    {
+        $this->get(route('login'))
+            ->assertSee('<input type="password" class="form-control" id="password"', false)
+            ->assertSee('data-password-toggle="password"', false)
+            ->assertSee('aria-label="Mostrar contraseña"', false);
+
+        $this->get(route('register'))
+            ->assertSee('<input type="password" class="form-control" id="password"', false)
+            ->assertSee('<input type="password" class="form-control" id="password_confirmation"', false)
+            ->assertSee('data-password-toggle="password"', false)
+            ->assertSee('data-password-toggle="password_confirmation"', false);
+    }
+
+    public function test_behind_the_https_proxy_forms_and_assets_use_https(): void
+    {
+        $url = 'http://urrushisha.test/login';
+
+        $response = $this->withHeaders(['X-Forwarded-Proto' => 'https'])->get($url)->assertOk();
+
+        $response->assertSee('action="https://urrushisha.test/auth/login"', false);
+        $response->assertSee('href="https://urrushisha.test/images/favicon-urrushisha.png"', false);
+        $response->assertDontSee('action="http://', false);
+    }
+
     public function test_login_and_registration_show_the_logo_and_every_page_has_its_icon(): void
     {
         foreach ([route('login'), route('register')] as $url) {
