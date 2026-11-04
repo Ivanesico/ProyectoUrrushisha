@@ -7,7 +7,7 @@ El usuario pide "un test para comprobar que funciona todo correctamente y si no 
 Objetivo:
 1. Dejar una batería de tests automáticos que cubra acceso, catálogo, marcas, favoritos, mezclas y administración.
 2. Corregir los errores que esa batería y la revisión del código destapen, dentro del criterio de esta spec.
-3. Añadir `rojo` a la lista cerrada de `tobacco_type`, por decisión expresa del usuario.
+3. Añadir `rojo` y `base` a la lista cerrada de `tobacco_type`, por decisión expresa del usuario.
 4. Hacer que el buscador ignore los acentos también en producción, por decisión expresa del usuario.
 
 No se añade ninguna otra funcionalidad nueva. Las únicas pantallas nuevas son las de marcas (RF-13 y RF-14), cuyas rutas ya existen y hoy no funcionan, y las páginas de error 403 y 404 en español (RF-62).
@@ -25,7 +25,7 @@ No se añade ninguna otra funcionalidad nueva. Las únicas pantallas nuevas son 
 - HU-5. Como admin, quiero gestionar sabores, marcas y categorías sin errores de servidor y sin perder datos.
 
 ## Definiciones
-- **Lista de tipos de tabaco**: `rubio`, `negro`, `herbal`, `rojo`, `sin_nicotina`. Es una lista cerrada; el valor vacío sigue permitido.
+- **Lista de tipos de tabaco**: `rubio`, `negro`, `herbal`, `base`, `rojo`, `sin_nicotina`. Es una lista cerrada; el valor vacío sigue permitido.
 - **Error de servidor**: respuesta con estado 500 o superior.
 - **Mezcla válida**: tiene al menos un sabor, no repite sabores, y sus porcentajes son enteros de 1 a 100 que suman exactamente 100.
 - **Sabor ya presente**: sabor guardado en la mezcla cuando empieza la edición en curso. Sigue siéndolo durante toda esa edición, aunque se quite de una fila o la edición se rechace.
@@ -108,7 +108,7 @@ No se añade ninguna otra funcionalidad nueva. Las únicas pantallas nuevas son 
 ### Administración: sabores
 - RF-43: CUANDO el admin crea, edita o elimina un sabor con datos válidos, EL SISTEMA aplica el cambio y muestra un mensaje en español acorde a la acción. [T]
 - RF-44: CUANDO el admin ordena el listado por id, nombre o marca, en cualquier dirección, EL SISTEMA lo muestra en ese orden. Un criterio no permitido se sustituye por el orden por defecto. [T]
-- RF-45: SI `tobacco_type` tiene un valor que no está en la lista de tipos de tabaco, ENTONCES EL SISTEMA lo rechaza sin error de servidor, con un error en español que indica los valores permitidos. Los 5 valores de la lista y el valor vacío se aceptan. [T]
+- RF-45: SI `tobacco_type` tiene un valor que no está en la lista de tipos de tabaco, ENTONCES EL SISTEMA lo rechaza sin error de servidor, con un error en español que indica los valores permitidos. Los 6 valores de la lista y el valor vacío se aceptan. [T]
 - RF-46: SI faltan marca, categoría o nombre, la marca o categoría no existen, el nombre supera 180 caracteres o los ingredientes superan 500, ENTONCES EL SISTEMA lo rechaza con un error en español y sin error de servidor. [T]
 - RF-47: SI el archivo subido no es una imagen jpg, jpeg, png o webp según su contenido real (también un archivo de texto renombrado a `.jpg`), o supera 2048 KB, ENTONCES EL SISTEMA lo rechaza con un error en español y no guarda el archivo. Un archivo de exactamente 2048 KB se acepta. [T]
 - RF-48: CUANDO el admin sube una imagen válida, EL SISTEMA la guarda como hasta ahora y en `flavors.image_url` queda la ruta relativa. Si edita sin subir otra, conserva la anterior. [T]
@@ -117,17 +117,17 @@ No se añade ninguna otra funcionalidad nueva. Las únicas pantallas nuevas son 
 - RF-68: SI se rechaza la edición de un sabor guardado como público y la casilla pública se envió desmarcada, ENTONCES EL SISTEMA vuelve a mostrar el formulario con la casilla desmarcada. Al abrir el formulario sin errores, la casilla sigue mostrando el valor guardado. [T]
 
 ### Lista de `tobacco_type` en la base de datos
-- RF-50: CUANDO se aplican todas las migraciones desde cero, EL SISTEMA acepta `rojo` en `tobacco_type` a nivel de base de datos y sigue rechazando valores fuera de la lista. [T]
-- RF-51: CUANDO la migración nueva se aplica sobre una base de datos con la lista antigua de 4 valores y con filas en sabores, favoritos y mezclas, EL SISTEMA amplía la lista a 5 valores sin modificar ni perder ninguna fila de sabores, favoritos, mezclas ni sabores de mezcla, y conserva sus claves foráneas e índices. Funciona en Postgres, MySQL y SQLite.
+- RF-50: CUANDO se aplican todas las migraciones desde cero, EL SISTEMA acepta `base` y `rojo` en `tobacco_type` a nivel de base de datos y sigue rechazando valores fuera de la lista. [T]
+- RF-51: CUANDO la migración nueva se aplica sobre una base de datos con la lista antigua de 4 valores, o sobre una que ya admite los 6 como producción, y con filas en sabores, favoritos y mezclas, EL SISTEMA deja la lista en 6 valores sin modificar ni perder ninguna fila de sabores, favoritos, mezclas ni sabores de mezcla, y conserva sus claves foráneas e índices. Funciona en Postgres, MySQL y SQLite.
   - [T] en SQLite, con filas en todas esas tablas y fuera de la transacción del test, comprobando filas antes y después y que las claves foráneas siguen activas.
   - [U] en el MySQL local: `php artisan migrate` termina sin error y los datos locales siguen disponibles.
   - [R] en Postgres, con estos criterios:
     - La migración obtiene la restricción CHECK real de la columna consultando el catálogo de Postgres, sin dar por supuesto su nombre.
-    - Elimina todas las que afectan a `tobacco_type` y crea una con los 5 valores, de forma que no pueda quedar activa la lista antigua.
+    - Elimina todas las que afectan a `tobacco_type` y crea una con los 6 valores, de forma que no pueda quedar activa la lista antigua.
     - Ambos pasos se hacen en una sola transacción.
     - No ejecuta `UPDATE` ni `DELETE` y no cambia el tipo de la columna.
-- RF-52: SI se revierte la migración nueva sin sabores con `rojo`, ENTONCES EL SISTEMA vuelve a la lista de 4 valores sin alterar ninguna fila de sabores, favoritos ni mezclas. SI hay sabores con `rojo`, ENTONCES la reversión falla con el mensaje en español "No se puede revertir: hay N sabores con tipo de tabaco rojo", donde N es el número real, y deja la lista y los datos intactos. [T en SQLite y R para Postgres, con los mismos criterios de RF-51]
-- RF-53: EL SISTEMA añade el valor mediante una migración nueva. La migración original de sabores queda igual que en Git y no entra en el commit. [R con `git diff` y `git status`]
+- RF-52: SI se revierte la migración nueva sin sabores con `base` ni `rojo`, ENTONCES EL SISTEMA vuelve a la lista de 4 valores sin alterar ninguna fila de sabores, favoritos ni mezclas. SI hay sabores con `rojo` o `base`, ENTONCES la reversión falla con el mensaje en español "No se puede revertir: hay N sabores con tipo de tabaco T", donde N es el número real y T es `rojo` o `base` (se comprueba primero `rojo`), y deja la lista y los datos intactos. [T en SQLite y R para Postgres, con los mismos criterios de RF-51]
+- RF-53: EL SISTEMA añade los valores mediante una migración nueva. La migración original de sabores queda igual que en Git y no entra en el commit. [R con `git diff` y `git status`]
 
 ### Mensajes, textos y robustez
 - RF-54: EL SISTEMA muestra un mensaje propio en español para cada regla de la tabla siguiente, sin texto en inglés ni claves como `validation.required`. [T, un caso por regla]
@@ -266,6 +266,7 @@ Un test no se debilita ni se elimina para que pase, salvo la excepción expresa 
 - Filtros de marca o categoría vacíos: no filtran.
 - `is_public` sin marcar en una mezcla o un sabor: se guarda como no público.
 - Base de datos que ya acepta `rojo` (por ejemplo, un MySQL local creado con el archivo modificado): la migración nueva se aplica igual, sin error.
+- Base de datos que ya acepta los 6 valores y tiene sabores con `base` y `rojo` (producción): la migración nueva se aplica sin error y sin cambiar ninguna fila.
 - Página 404 de una URL que no corresponde a ninguna ruta: se ve en español aunque no se detecte la sesión del usuario.
 - Texto guardado con acentos en forma descompuesta (letra más signo combinado): no está cubierto por RF-12.
 
@@ -298,8 +299,8 @@ Un test no se debilita ni se elimina para que pase, salvo la excepción expresa 
 - El usuario ha informado del resultado de los comandos [U].
 - La migración original de sabores no aparece en `git status`. Antes del commit, `git status` y `git diff` lo confirman.
 - Antes de pedir el push, se avisa de que incluye una migración que se ejecutará en producción con `migrate --force`; de que su parte de Postgres no se ha ejecutado en ningún test; y de que, si falla, la aplicación no arranca.
-- Tras el push, se pide al usuario que compruebe en producción que puede guardar un sabor de tipo `rojo` y que la búsqueda sin acentos encuentra uno con acentos.
-- En el cierre se propone al usuario actualizar CLAUDE.md, que quedará desactualizado: dice que `tobacco_type` tiene 4 valores. Esta spec no lo edita.
+- Tras el push, se pide al usuario que compruebe en producción que la aplicación arranca, que puede guardar un sabor de tipo `rojo` y otro de tipo `base`, y que la búsqueda sin acentos encuentra uno con acentos.
+- CLAUDE.md se actualiza en local con los 6 valores de `tobacco_type`, con la aprobación del usuario. No entra en el commit.
 
 ## Dudas abiertas
 Ninguna.
@@ -318,9 +319,10 @@ Esta sección incluye detalles técnicos porque se pidió dejarlos indicados par
 **Migración de `tobacco_type`** (leído en las gramáticas de Laravel de `vendor/`, sin ejecutar):
 - **Postgres**: `enum` se crea como `varchar(255) check ("tobacco_type" in (...))`, es decir, una restricción CHECK. `->change()` generaría `alter column ... type varchar(255) check (...)`, que no es SQL válido.
 - **Nombre de la restricción**: el automático sería `flavors_tobacco_type_check`, sin comprobar en producción. Un `DROP CONSTRAINT IF EXISTS` con un nombre equivocado no da error y deja activa la lista antigua. Por eso RF-51 exige consultar `pg_constraint`.
-- **MySQL**: es un `enum` nativo; se redefine la columna con los 5 valores, manteniéndola `nullable`.
+- **MySQL**: es un `enum` nativo; se redefine la columna con los 6 valores, manteniéndola `nullable`.
 - **SQLite**: `enum` es una restricción CHECK y `->change()` reconstruye la tabla con `DROP TABLE`. `compileAlter` desactiva las claves foráneas con un `PRAGMA`, pero SQLite lo ignora dentro de una transacción. Con filas hijas, `favorites` (en cascada) perdería filas y `mix_items` (restricción) haría fallar la migración. Con `RefreshDatabase` las tablas están vacías y el problema no se ve. El plan debe decidir cómo evitarlo (por ejemplo, `$withinTransaction = false` con una transacción explícita en la rama de Postgres) y aislar el test de RF-51 y RF-52 del resto.
-- **Datos**: los valores actuales de producción están limitados a los 4 antiguos, que siguen siendo válidos.
+- **Datos** (comprobado en producción el 2026-11-04, con consultas de solo lectura): la restricción real admite 6 valores, `rubio`, `negro`, `herbal`, `base`, `rojo` y `sin_nicotina`, y no los 4 del archivo original en Git. Ninguna migración de Git explica esa diferencia. Hay sabores con `base` (2) y con `rojo` (1). Una lista sin `base` haría fallar la migración e impediría arrancar la aplicación.
+- **Migración modificada tras la validación**: la migración de `rojo` se corrige para dejar 6 valores, en vez de crear otra, por decisión expresa del usuario. No se había aplicado en producción, y otra migración posterior no llegaría a ejecutarse porque esta fallaría antes. En el MySQL local se revierte y se vuelve a aplicar.
 - **Riesgo de despliegue**: el arranque es `... migrate --force && php artisan serve ...`; si la migración falla, la aplicación no arranca. Antes del push, el usuario puede confirmar la restricción real con una consulta de solo lectura a `pg_constraint` en Railway.
 
 **Tests:**

@@ -52,15 +52,16 @@ class TobaccoTypeMigrationTest extends TestCase
         });
     }
 
-    public function test_all_migrations_from_scratch_accept_rojo_and_reject_values_outside_the_list(): void
+    public function test_all_migrations_from_scratch_accept_base_and_rojo_and_reject_values_outside_the_list(): void
     {
         $this->migrate();
         $this->insertBrandAndCategory();
 
-        foreach (['rubio', 'negro', 'herbal', 'rojo', 'sin_nicotina', null] as $index => $type) {
+        foreach (['rubio', 'negro', 'herbal', 'base', 'rojo', 'sin_nicotina', null] as $index => $type) {
             $this->insertFlavor(100 + $index, $type);
         }
 
+        $this->assertSame(1, DB::table('flavors')->where('tobacco_type', 'base')->count());
         $this->assertSame(1, DB::table('flavors')->where('tobacco_type', 'rojo')->count());
         $this->assertTobaccoTypeRejected('virginia');
         $this->assertTobaccoTypeRejected('ROJO');
@@ -71,13 +72,13 @@ class TobaccoTypeMigrationTest extends TestCase
         $this->migrate();
         $this->insertBrandAndCategory();
 
-        $this->assertSame(['rubio', 'negro', 'herbal', 'rojo', 'sin_nicotina'], Flavor::TOBACCO_TYPES);
+        $this->assertSame(['rubio', 'negro', 'herbal', 'base', 'rojo', 'sin_nicotina'], Flavor::TOBACCO_TYPES);
 
         foreach (Flavor::TOBACCO_TYPES as $index => $type) {
             $this->insertFlavor(100 + $index, $type);
         }
 
-        $this->assertSame(5, DB::table('flavors')->count());
+        $this->assertSame(6, DB::table('flavors')->count());
     }
 
     public function test_migration_over_the_old_list_keeps_every_row(): void
@@ -92,6 +93,27 @@ class TobaccoTypeMigrationTest extends TestCase
 
         $this->assertSame($rowsBefore, $this->allRows());
         $this->insertFlavor(100, 'rojo');
+        $this->insertFlavor(101, 'base');
+    }
+
+    /**
+     * Production already allows the 6 values and has flavors with base and rojo.
+     */
+    public function test_migration_over_a_database_that_already_has_the_six_values_keeps_every_row(): void
+    {
+        $this->prepareOldListWithRows();
+        $this->migrate();
+        $this->insertFlavor(100, 'base');
+        $this->insertFlavor(101, 'base');
+        $this->insertFlavor(102, 'rojo');
+        $rowsBefore = $this->allRows();
+
+        $this->migrationInstance()->up();
+
+        $this->assertSame($rowsBefore, $this->allRows());
+        $this->insertFlavor(103, 'base');
+        $this->insertFlavor(104, 'rojo');
+        $this->assertTobaccoTypeRejected('virginia');
     }
 
     public function test_migration_over_the_old_list_keeps_columns_indexes_and_foreign_keys(): void
@@ -136,7 +158,7 @@ class TobaccoTypeMigrationTest extends TestCase
         $this->assertSame(1, (int) DB::table('flavors')->where('id', 100)->value('is_public'));
     }
 
-    public function test_revert_without_rojo_goes_back_to_four_values_and_keeps_every_row(): void
+    public function test_revert_without_base_or_rojo_goes_back_to_four_values_and_keeps_every_row(): void
     {
         $this->prepareOldListWithRows();
         $this->migrate();
@@ -146,6 +168,7 @@ class TobaccoTypeMigrationTest extends TestCase
 
         $this->assertSame($rowsBefore, $this->allRows());
         $this->assertTobaccoTypeRejected('rojo');
+        $this->assertTobaccoTypeRejected('base');
 
         foreach (['rubio', 'negro', 'herbal', 'sin_nicotina', null] as $index => $type) {
             $this->insertFlavor(100 + $index, $type);
@@ -169,6 +192,26 @@ class TobaccoTypeMigrationTest extends TestCase
 
         $this->assertSame($rowsBefore, $this->allRows());
         $this->insertFlavor(102, 'rojo');
+    }
+
+    public function test_revert_with_base_fails_with_the_exact_message_and_changes_nothing(): void
+    {
+        $this->prepareOldListWithRows();
+        $this->migrate();
+        $this->insertFlavor(100, 'base');
+        $this->insertFlavor(101, 'base');
+        $this->insertFlavor(102, 'base');
+        $rowsBefore = $this->allRows();
+
+        try {
+            $this->migrationInstance()->down();
+            $this->fail('The revert should have been rejected.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('No se puede revertir: hay 3 sabores con tipo de tabaco base', $exception->getMessage());
+        }
+
+        $this->assertSame($rowsBefore, $this->allRows());
+        $this->insertFlavor(103, 'base');
     }
 
     private function failUnlessInMemorySqlite(): void
@@ -212,6 +255,7 @@ class TobaccoTypeMigrationTest extends TestCase
 
         $this->insertBrandAndCategory();
         $this->assertTobaccoTypeRejected('rojo');
+        $this->assertTobaccoTypeRejected('base');
 
         DB::table('users')->insert([
             ['id' => 1, 'name' => 'Ana', 'email' => 'ana@example.com', 'password' => 'hash', 'is_admin' => 0],

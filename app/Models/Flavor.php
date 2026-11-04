@@ -11,7 +11,7 @@ class Flavor extends Model {
 
     use HasFactory;
 
-    public const TOBACCO_TYPES = ['rubio', 'negro', 'herbal', 'rojo', 'sin_nicotina'];
+    public const TOBACCO_TYPES = ['rubio', 'negro', 'herbal', 'base', 'rojo', 'sin_nicotina'];
 
     // Letras que el buscador ignora. Se aplica igual a lo que escribe el usuario y a la columna.
     private const SEARCH_REPLACEMENTS = [

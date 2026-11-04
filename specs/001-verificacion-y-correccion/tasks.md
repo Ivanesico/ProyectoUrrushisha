@@ -24,12 +24,12 @@
   - **Archivos modificados:**
     - `tests/Feature/ExampleTest.php`: la aserción espera la redirección al login, sin ningún otro cambio.
     - `app/Models/Brand.php`, `Category.php`, `Flavor.php`, `Mix.php`: `HasFactory`.
-    - `app/Models/Flavor.php`: además, la constante `TOBACCO_TYPES` con los 5 valores.
+    - `app/Models/Flavor.php`: además, la constante `TOBACCO_TYPES` con los 6 valores.
   - **Puntos críticos:**
     - La rama `pgsql` obtiene el nombre desde `pg_constraint`, no usa `IF EXISTS`, se comprueba a sí misma y mantiene `$withinTransaction` por defecto.
     - `TobaccoTypeMigrationTest` no usa `RefreshDatabase`. Su `setUp()` debe fallar si el driver no es `sqlite` con `:memory:`, antes de ejecutar nada.
     - Sus filas de prueba incluyen favoritos y sabores de mezcla.
-    - El texto de la reversión es exacto: `No se puede revertir: hay N sabores con tipo de tabaco rojo`.
+    - El texto de la reversión es exacto: `No se puede revertir: hay N sabores con tipo de tabaco T`, con `rojo` o `base` en lugar de T.
     - No hay ninguna rama `$table->enum` sin `->nullable()`.
   - **Hecho cuando:**
     - `git status` no muestra la migración original, y `git diff HEAD` no muestra cambios en ella.

@@ -7,7 +7,7 @@ Parte de la spec aprobada (`spec.md`). Cada RF se cubre según su marca en la sp
 ### Nuevos
 | Archivo | Responsabilidad | RF |
 |---|---|---|
-| `database/migrations/2026_11_03_000000_add_rojo_to_flavors_tobacco_type.php` | Amplía la lista a 5 valores en los 3 motores; la reversión la devuelve a 4 | RF-50 a 53 |
+| `database/migrations/2026_11_03_000000_add_rojo_to_flavors_tobacco_type.php` | Deja la lista en 6 valores en los 3 motores; la reversión la devuelve a 4 | RF-50 a 53 |
 | `database/seeders/LocalTestUsersSeeder.php` | Copia exacta de `.claude/database/seeders/LocalTestUsersSeeder.php` (el original no se toca) | RF-56, 57 |
 | `database/seeders/LocalTestDataSeeder.php` | Datos de prueba locales, sin borrar nada y sin duplicar | RF-65, 66 |
 | `database/factories/BrandFactory.php`, `CategoryFactory.php`, `FlavorFactory.php`, `MixFactory.php` | Datos de los tests | Todos los [T] |
@@ -55,7 +55,7 @@ Parte de la spec aprobada (`spec.md`). Cada RF se cubre según su marca en la sp
 | `resources/views/admin/categories/index.blade.php` | Usa `$category` en vez de `$flavor`, que da error de servidor con cualquier categoría en la lista | RF-36, 38 |
 | `resources/views/admin/flavors/edit.blade.php` | Solo la casilla pública | RF-68 |
 
-No se tocan `.env`, `composer.json`, `package.json`, `CLAUDE.md` ni los restos que lista CLAUDE.md, ni se añade carpeta `lang/`.
+No se tocan `.env`, `composer.json`, `package.json` ni los restos que lista CLAUDE.md, ni se añade carpeta `lang/`. `CLAUDE.md` solo cambia en local, para recoger los 6 valores, con la aprobación del usuario.
 
 ## 2. Rutas
 No hay rutas nuevas ni cambia ningún middleware ni nombre.
@@ -67,7 +67,7 @@ Al principio de `routes/web.php`, antes de definir rutas, se añade `Route::patt
 ## 3. Base de datos
 
 ### Migración de `tobacco_type` (RF-50 a 53)
-Solo cambia la restricción de la lista. **Efecto en producción**: los valores actuales están dentro de los 4 antiguos, que siguen siendo válidos; no se modifica ninguna fila.
+Solo cambia la restricción de la lista. **Efecto en producción**: ya admite los 6 valores (comprobado con una consulta de solo lectura), así que la lista queda igual y no se modifica ninguna fila.
 
 Comprobado en `vendor/`:
 - `Migrator.php:448` solo abre transacción si la gramática la admite. `PostgresGrammar` tiene `$transactions = true`; las de SQLite y MySQL, no.
@@ -89,19 +89,19 @@ Comprobado en `vendor/`:
    ```
 2. Elimina cada una con `ALTER TABLE flavors DROP CONSTRAINT "<nombre obtenido>"`. **No se usa `IF EXISTS`**: el nombre viene del catálogo, y si algo falla debe dar error.
 3. Crea `flavors_tobacco_type_check` con `CHECK (tobacco_type IN (...))`. `NULL` sigue permitido, porque `CHECK` lo acepta.
-4. **Se comprueba a sí misma**: repite la consulta con `pg_get_constraintdef(c.oid)`. Si no hay exactamente una restricción, o `up()` no encuentra `'rojo'`, o `down()` lo encuentra, lanza una excepción. La transacción se deshace y `rojo` no puede quedar fallando en silencio.
+4. **Se comprueba a sí misma**: repite la consulta con `pg_get_constraintdef(c.oid)`. Si no hay exactamente una restricción, o `up()` no encuentra `'base'` y `'rojo'`, o `down()` encuentra alguno, lanza una excepción. La transacción se deshace y la lista no puede quedar mal en silencio.
 
 No hay `UPDATE` ni `DELETE`, ni cambia el tipo de la columna.
 
-**`down()`:** antes de nada, cuenta los sabores con `rojo`. Si hay N > 0, lanza `RuntimeException` con el texto exacto `No se puede revertir: hay N sabores con tipo de tabaco rojo`, sin tocar nada. Si no hay, repite el mismo proceso con los 4 valores.
+**`down()`:** antes de nada, cuenta los sabores con `rojo` y luego con `base`. Si hay N > 0 de alguno, lanza `RuntimeException` con el texto exacto `No se puede revertir: hay N sabores con tipo de tabaco T`, sin tocar nada. Si no hay, repite el mismo proceso con los 4 valores.
 
 ### Cómo se revisa la parte de Postgres (ningún test la ejecuta)
 `pdo_pgsql` está desactivado y activarlo está en la lista de consulta de la spec. Hay 3 controles:
 1. **Reviewer, en la validación** ("revisado, no ejecutado"): comprueba los 4 pasos anteriores y estos puntos: no hay `IF EXISTS`; el nombre sale de la consulta; no hay `$withinTransaction = false`; no hay `UPDATE` ni `DELETE`; el nombre eliminado va entre comillas dobles; ninguna sentencia de Postgres llega a otro motor.
 2. **Usuario, antes del push** (lo pide el coordinador en el cierre; ningún agente toca producción). En la consola de Postgres de Railway:
    - Solo lectura: `SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'flavors'::regclass AND contype = 'c';`
-   - Ensayo que no deja cambios: `BEGIN;`, luego `ALTER TABLE flavors DROP CONSTRAINT "<nombre obtenido>";`, luego `ALTER TABLE flavors ADD CONSTRAINT flavors_tobacco_type_check CHECK (tobacco_type IN ('rubio','negro','herbal','rojo','sin_nicotina'));` y por último `ROLLBACK;`.
-3. **Usuario, después del push**: guardar un sabor `rojo` en producción (criterio de finalización de la spec).
+   - Ensayo que no deja cambios: `BEGIN;`, luego `ALTER TABLE flavors DROP CONSTRAINT "<nombre obtenido>";`, luego `ALTER TABLE flavors ADD CONSTRAINT flavors_tobacco_type_check CHECK (tobacco_type IN ('rubio','negro','herbal','base','rojo','sin_nicotina'));` y por último `ROLLBACK;`.
+3. **Usuario, después del push**: comprobar que la aplicación arranca y guardar un sabor `rojo` y otro `base` en producción (criterio de finalización de la spec).
 
 **Si falla en producción:** la transacción se deshace, sin cambios en los datos, pero `migrate --force && ... serve` impide arrancar. Se avisa antes de pedir el push.
 
@@ -296,4 +296,4 @@ El usuario informa del resultado (evidencia de los [U] de RF-51, 56 y 65) y ento
   - `MEMORY.md`: por decisión del usuario, se actualiza en local y queda fuera del commit.
 - Antes del commit: `git status` y `git diff` comparados con esta lista.
 - Antes de pedir el push: avisar de la migración y de que la aplicación no arranca si falla, y ofrecer los controles de Postgres de la sección 3.
-- En el cierre se propone actualizar CLAUDE.md (5 valores de `tobacco_type`).
+- CLAUDE.md se actualiza en local con los 6 valores de `tobacco_type`, con la aprobación del usuario.

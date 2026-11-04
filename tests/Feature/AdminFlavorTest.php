@@ -23,7 +23,7 @@ class AdminFlavorTest extends TestCase
     // PNG real de 1x1: GD está desactivado y no se puede usar UploadedFile::fake()->image()
     private const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
-    private const TOBACCO_TYPE_MESSAGE = 'El tipo de tabaco debe ser uno de estos valores: rubio, negro, herbal, rojo, sin_nicotina.';
+    private const TOBACCO_TYPE_MESSAGE = 'El tipo de tabaco debe ser uno de estos valores: rubio, negro, herbal, base, rojo, sin_nicotina.';
 
     private const ERROR_A_REASON = 'Error conocido A (excepción expresa de la spec 001): un array en un campo de texto provoca un error de servidor al volver al formulario.';
 
@@ -233,6 +233,7 @@ class AdminFlavorTest extends TestCase
             'rubio' => ['rubio'],
             'negro' => ['negro'],
             'herbal' => ['herbal'],
+            'base' => ['base'],
             'rojo' => ['rojo'],
             'sin_nicotina' => ['sin_nicotina'],
         ];

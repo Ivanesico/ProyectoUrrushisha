@@ -6,7 +6,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Adds "rojo" to the closed list of flavors.tobacco_type.
+ * Adds "base" and "rojo" to the closed list of flavors.tobacco_type.
+ *
+ * Production already allows these 6 values and has flavors using them, even
+ * though the original migration only lists 4, so the new list must include both.
  *
  * Only the list restriction changes: no row is updated or deleted.
  * $withinTransaction keeps its default value on purpose: the Migrator opens a
@@ -16,7 +19,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
 
     private const OLD_VALUES = ['rubio', 'negro', 'herbal', 'sin_nicotina'];
-    private const NEW_VALUES = ['rubio', 'negro', 'herbal', 'rojo', 'sin_nicotina'];
+    private const NEW_VALUES = ['rubio', 'negro', 'herbal', 'base', 'rojo', 'sin_nicotina'];
+    private const ADDED_VALUES = ['rojo', 'base'];
 
     /**
      * Run the migrations.
@@ -29,10 +33,12 @@ return new class extends Migration {
      * Reverse the migrations.
      */
     public function down(): void {
-        $rojoFlavors = DB::table('flavors')->where('tobacco_type', 'rojo')->count();
+        foreach (self::ADDED_VALUES as $value) {
+            $flavors = DB::table('flavors')->where('tobacco_type', $value)->count();
 
-        if ($rojoFlavors > 0) {
-            throw new RuntimeException("No se puede revertir: hay {$rojoFlavors} sabores con tipo de tabaco rojo");
+            if ($flavors > 0) {
+                throw new RuntimeException("No se puede revertir: hay {$flavors} sabores con tipo de tabaco {$value}");
+            }
         }
 
         $this->changeAllowedValues(self::OLD_VALUES);
@@ -81,21 +87,23 @@ return new class extends Migration {
 
         DB::statement("ALTER TABLE flavors ADD CONSTRAINT flavors_tobacco_type_check CHECK (tobacco_type IN ({$list}))");
 
-        $this->verifyPostgresCheckConstraint(in_array('rojo', $values, true));
+        $this->verifyPostgresCheckConstraint($values === self::NEW_VALUES);
     }
 
     /**
      * Any failure here rolls back the Migrator's transaction.
      */
-    private function verifyPostgresCheckConstraint(bool $expectsRojo): void {
+    private function verifyPostgresCheckConstraint(bool $expectsAddedValues): void {
         $constraints = $this->postgresCheckConstraints();
 
         if (count($constraints) !== 1) {
             throw new RuntimeException('Expected exactly one CHECK constraint on flavors.tobacco_type, found ' . count($constraints));
         }
 
-        if (str_contains($constraints[0]->definition, "'rojo'") !== $expectsRojo) {
-            throw new RuntimeException("Unexpected CHECK constraint on flavors.tobacco_type: {$constraints[0]->definition}");
+        foreach (self::ADDED_VALUES as $value) {
+            if (str_contains($constraints[0]->definition, "'{$value}'") !== $expectsAddedValues) {
+                throw new RuntimeException("Unexpected CHECK constraint on flavors.tobacco_type: {$constraints[0]->definition}");
+            }
         }
     }
 
