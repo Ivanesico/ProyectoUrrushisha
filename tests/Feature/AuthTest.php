@@ -252,6 +252,24 @@ class AuthTest extends TestCase
         }
     }
 
+    // RF-1 a 4: el logo nuevo conserva los nombres y las medidas, así que el HTML no cambia
+    public function test_the_logo_images_keep_their_sizes(): void
+    {
+        $sizes = [
+            'logo-urrushisha.png' => [176, 151],
+            'logo-urrushisha-grande.png' => [400, 342],
+            'favicon-urrushisha.png' => [64, 55],
+        ];
+
+        foreach ($sizes as $file => [$width, $height]) {
+            $info = getimagesize(public_path('images/'.$file));
+
+            $this->assertNotFalse($info, $file);
+            $this->assertSame([$width, $height], [$info[0], $info[1]], $file);
+            $this->assertSame('image/png', $info['mime'], $file);
+        }
+    }
+
     public function test_the_login_page_does_not_include_the_registration_script(): void
     {
         $this->get(route('login'))

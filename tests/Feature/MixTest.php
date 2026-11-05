@@ -618,6 +618,106 @@ class MixTest extends TestCase
             ->assertSee($this->first->brand->name);
     }
 
+    /**
+     * HTML de la ventana de una mezcla: desde su id hasta la siguiente ventana o el final de <main>.
+     */
+    private function mixWindow(string $html, Mix $mix): string
+    {
+        $start = strpos($html, 'id="mixModal-'.$mix->id.'"');
+        $this->assertNotFalse($start, 'La ventana de la mezcla no aparece en el listado.');
+
+        $ends = array_filter([
+            strpos($html, 'class="modal fade', $start),
+            strpos($html, '</main>', $start),
+        ], fn ($position) => $position !== false);
+        $this->assertNotEmpty($ends);
+
+        return substr($html, $start, min($ends) - $start);
+    }
+
+    // RF-13
+    public function test_the_list_has_a_window_for_each_own_mix_with_its_data(): void
+    {
+        $public = $this->savedMix([$this->first->id => 70, $this->second->id => 30], ['name' => 'Mezcla de día', 'notes' => 'Con mucho hielo']);
+        $private = $this->savedMix([$this->first->id => 100], ['name' => 'Mezcla de noche', 'notes' => null, 'is_public' => false]);
+
+        $html = $this->get(route('mixes.index'))->assertOk()->getContent();
+
+        $window = $this->mixWindow($html, $public);
+        $this->assertStringContainsString('Mezcla de día', $window);
+        $this->assertStringContainsString('Pública', $window);
+        $this->assertStringContainsString('Con mucho hielo', $window);
+        $this->assertStringContainsString('Arándano', $window);
+        $this->assertStringContainsString('Menta', $window);
+        $this->assertStringContainsString(e($this->first->brand->name), $window);
+        $this->assertStringContainsString(e($this->second->brand->name), $window);
+        $this->assertStringContainsString('70%', $window);
+        $this->assertStringContainsString('30%', $window);
+        $this->assertStringContainsString('flex-grow: 70', $window);
+        $this->assertStringContainsString('Creada el '.$public->created_at->format('d/m/Y'), $window);
+        $this->assertStringContainsString('aria-label="Cerrar"', $window);
+
+        $window = $this->mixWindow($html, $private);
+        $this->assertStringContainsString('Mezcla de noche', $window);
+        $this->assertStringContainsString('Privada', $window);
+        $this->assertStringContainsString('100%', $window);
+        $this->assertStringNotContainsString('Pública', $window);
+
+        // La tarjeta abre su ventana
+        $this->assertStringContainsString('openMixModal('.$public->id.')', $html);
+    }
+
+    // RF-15, RF-16
+    public function test_the_mix_window_has_edit_and_delete_actions(): void
+    {
+        $mix = $this->savedMix();
+
+        $window = $this->mixWindow($this->get(route('mixes.index'))->assertOk()->getContent(), $mix);
+
+        $this->assertStringContainsString('href="'.route('mixes.edit', $mix).'"', $window);
+        $this->assertStringContainsString('action="'.route('mixes.destroy', $mix).'"', $window);
+        $this->assertStringContainsString('name="_method" value="DELETE"', $window);
+        $this->assertStringContainsString("return confirm('¿Seguro que quieres eliminar esta mezcla?')", $window);
+        $this->assertStringContainsString('>Editar</a>', $window);
+        $this->assertStringContainsString('>Eliminar</button>', $window);
+    }
+
+    // RF-19
+    public function test_the_list_has_no_window_for_foreign_mixes(): void
+    {
+        $own = $this->savedMix();
+        $foreign = Mix::factory()->visibleToOthers()->create(['name' => 'Mezcla ajena pública']);
+
+        $response = $this->get(route('mixes.index'))->assertOk();
+
+        $response->assertSee('id="mixModal-'.$own->id.'"', false);
+        $response->assertDontSee('id="mixModal-'.$foreign->id.'"', false);
+        $response->assertDontSee('openMixModal('.$foreign->id.')', false);
+    }
+
+    // RF-13 (caso límite)
+    public function test_a_mix_without_flavors_shows_the_empty_text_in_its_window(): void
+    {
+        $mix = Mix::factory()->create(['user_id' => $this->user->id, 'name' => 'Mezcla vacía']);
+
+        $window = $this->mixWindow($this->get(route('mixes.index'))->assertOk()->getContent(), $mix);
+
+        $this->assertStringContainsString('Esta mezcla no tiene sabores.', $window);
+        $this->assertStringNotContainsString('class="mix-bar', $window);
+    }
+
+    // RF-13
+    public function test_a_mix_without_created_at_shows_no_date(): void
+    {
+        $mix = $this->savedMix();
+        DB::table('mixes')->where('id', $mix->id)->update(['created_at' => null]);
+
+        $response = $this->get(route('mixes.index'))->assertOk();
+
+        $response->assertDontSee('Creada el');
+        $this->assertStringContainsString('Mezcla guardada', $this->mixWindow($response->getContent(), $mix));
+    }
+
     public function test_the_create_form_starts_with_one_empty_row_and_no_errors(): void
     {
         $response = $this->get(route('mixes.create'))->assertOk();

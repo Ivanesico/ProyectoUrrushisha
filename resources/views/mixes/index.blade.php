@@ -3,9 +3,6 @@
 @section('title', 'Mezclas')
 
 @section('content')
-@php
-    $barColors = ['#8b5cf6', '#ec4899', '#f59e0b', '#14b8a6', '#38bdf8', '#a3e635'];
-@endphp
 <div class="container py-4">
     @if(session('success'))
     <div class="alert alert-success rounded-4">
@@ -34,41 +31,18 @@
     <div class="row g-3 g-lg-4">
         @foreach($mixes as $mix)
         <div class="col-md-6 col-xl-4">
-            <article class="mix-card">
+            <article class="mix-card"
+                     role="button"
+                     tabindex="0"
+                     aria-label="Ver la mezcla {{ $mix->name }}"
+                     onclick="openMixModal({{ $mix->id }})"
+                     onkeydown="if (event.key === 'Enter' && event.target === this) openMixModal({{ $mix->id }})">
                 <header class="mix-card-header">
                     <h2 class="mix-card-name">{{ $mix->name }}</h2>
                     <span class="mix-visibility {{ $mix->is_public ? 'is-public' : '' }}">{{ $mix->is_public ? 'Pública' : 'Privada' }}</span>
                 </header>
 
-                @if($mix->items->isNotEmpty())
-                <div class="mix-bar" aria-hidden="true">
-                    @foreach($mix->items as $item)
-                    <span style="flex-grow: {{ (int) $item->ratio }}; background: {{ $barColors[$loop->index % count($barColors)] }};"></span>
-                    @endforeach
-                </div>
-                @endif
-
-                <div class="mix-items-list">
-                    @forelse($mix->items as $item)
-                    <div class="mix-item-row">
-                        <div class="mix-flavor-thumb" style="--mix-color: {{ $barColors[$loop->index % count($barColors)] }};">
-                            <div class="mix-flavor-placeholder">{{ $item->flavor ? $item->flavor->initial : '?' }}</div>
-                            @if($item->flavor && $item->flavor->image_url)
-                            <img src="{{ asset('storage/' . $item->flavor->image_url) }}" alt="" loading="lazy" onerror="this.remove()">
-                            @endif
-                        </div>
-
-                        <div class="mix-flavor-info">
-                            <div class="mix-flavor-name">{{ $item->flavor->name ?? 'Sabor no disponible' }}</div>
-                            <div class="mix-flavor-brand">{{ $item->flavor->brand->name ?? 'Sin marca' }}</div>
-                        </div>
-
-                        <div class="mix-ratio">{{ $item->ratio }}%</div>
-                    </div>
-                    @empty
-                    <p class="mix-card-muted mb-0">Esta mezcla no tiene sabores.</p>
-                    @endforelse
-                </div>
+                @include('mixes._mix-items', ['mix' => $mix, 'size' => 'card'])
 
                 @if($mix->notes)
                 <p class="mix-notes">{{ $mix->notes }}</p>
@@ -77,7 +51,8 @@
                 <footer class="mix-card-footer">
                     <span class="mix-card-muted">{{ $mix->created_at ? 'Creada el ' . $mix->created_at->format('d/m/Y') : '' }}</span>
 
-                    <div class="d-flex gap-2">
+                    {{-- Las acciones no abren la ventana --}}
+                    <div class="d-flex gap-2" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
                         <a href="{{ route('mixes.edit', $mix) }}" class="mix-action">Editar</a>
 
                         <form action="{{ route('mixes.destroy', $mix) }}" method="POST" onsubmit="return confirm('¿Seguro que quieres eliminar esta mezcla?')">
@@ -91,6 +66,45 @@
         </div>
         @endforeach
     </div>
+
+    {{-- Una ventana por mezcla, fuera de las tarjetas para que sus clics no lleguen a ellas --}}
+    @foreach($mixes as $mix)
+    <div class="modal fade mix-modal" id="mixModal-{{ $mix->id }}" tabindex="-1" aria-labelledby="mixModalTitle-{{ $mix->id }}" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="mix-modal-heading">
+                        <h2 class="mix-card-name mix-modal-name" id="mixModalTitle-{{ $mix->id }}">{{ $mix->name }}</h2>
+                        <span class="mix-visibility {{ $mix->is_public ? 'is-public' : '' }}">{{ $mix->is_public ? 'Pública' : 'Privada' }}</span>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    @include('mixes._mix-items', ['mix' => $mix, 'size' => 'modal'])
+
+                    @if($mix->notes)
+                    <p class="mix-notes mt-3">{{ $mix->notes }}</p>
+                    @endif
+                </div>
+
+                <div class="modal-footer mix-card-footer">
+                    <span class="mix-card-muted">{{ $mix->created_at ? 'Creada el ' . $mix->created_at->format('d/m/Y') : '' }}</span>
+
+                    <div class="d-flex gap-2">
+                        <a href="{{ route('mixes.edit', $mix) }}" class="mix-action">Editar</a>
+
+                        <form action="{{ route('mixes.destroy', $mix) }}" method="POST" onsubmit="return confirm('¿Seguro que quieres eliminar esta mezcla?')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="mix-action is-danger">Eliminar</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endforeach
     @endif
 </div>
 @endsection
@@ -155,6 +169,94 @@
         border-radius: 22px;
         background: rgba(255, 255, 255, 0.05);
         color: var(--us-text-strong);
+        cursor: pointer;
+        transition: border-color 0.15s ease;
+    }
+
+    .mix-card:hover,
+    .mix-card:focus-visible {
+        border-color: rgba(139, 92, 246, 0.7);
+    }
+
+    .mix-card:focus-visible {
+        outline: 2px solid #8b5cf6;
+        outline-offset: 2px;
+    }
+
+    .mix-items {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    /* Ventana de la mezcla: el mismo aspecto oscuro y translúcido que la tarjeta */
+    .mix-modal .modal-dialog {
+        margin-left: 0.75rem;
+        margin-right: 0.75rem;
+    }
+
+    @media (min-width: 576px) {
+        .mix-modal .modal-dialog {
+            margin-left: auto;
+            margin-right: auto;
+        }
+    }
+
+    .mix-modal .modal-content {
+        border: 1px solid var(--us-line);
+        border-radius: 22px;
+        background:
+            linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05)),
+            rgba(17, 19, 24, 0.82);
+        -webkit-backdrop-filter: blur(14px);
+        backdrop-filter: blur(14px);
+        color: var(--us-text-strong);
+    }
+
+    .mix-modal .modal-header {
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1.25rem 1.25rem 0.75rem;
+        border-bottom: 0;
+    }
+
+    .mix-modal-heading {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        min-width: 0;
+    }
+
+    .mix-modal-name {
+        font-size: 1.5rem;
+    }
+
+    .mix-modal .modal-body {
+        padding: 0.5rem 1.25rem 1rem;
+    }
+
+    .mix-modal .modal-footer {
+        margin: 0 1.25rem;
+        padding: 0.85rem 0 1.25rem;
+    }
+
+    .mix-modal .modal-footer > * {
+        margin: 0;
+    }
+
+    .mix-items.is-modal .mix-flavor-thumb {
+        width: 6rem;
+        height: 6rem;
+        border-radius: 16px;
+    }
+
+    .mix-items.is-modal .mix-flavor-name {
+        font-size: 1.1rem;
+    }
+
+    .mix-items.is-modal .mix-ratio {
+        font-size: 1.3rem;
     }
 
     .mix-card-header {
@@ -215,8 +317,8 @@
 
     .mix-flavor-thumb {
         position: relative;
-        width: 2.9rem;
-        height: 2.9rem;
+        width: 4rem;
+        height: 4rem;
         flex-shrink: 0;
         overflow: hidden;
         border-radius: 12px;
@@ -315,4 +417,15 @@
         color: #fecaca;
     }
 </style>
+@endpush
+
+@push('scripts')
+<script>
+    function openMixModal(id) {
+        const modal = document.getElementById('mixModal-' + id);
+        if (modal) {
+            bootstrap.Modal.getOrCreateInstance(modal).show();
+        }
+    }
+</script>
 @endpush

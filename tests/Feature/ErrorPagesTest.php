@@ -59,6 +59,17 @@ class ErrorPagesTest extends TestCase
         $this->assertSpanishNotFoundPage($this->get('/esta-url-no-existe'));
     }
 
+    // RF-1: la barra de la página 404 muestra el logo junto al texto, también sin sesión
+    public function test_the_404_page_shows_the_navbar_logo_without_a_session(): void
+    {
+        $response = $this->get('/esta-url-no-existe');
+
+        $this->assertSpanishNotFoundPage($response);
+        $response->assertSee('images/logo-urrushisha.png', false);
+        $response->assertSee('URRUSHISHA');
+        $this->assertGuest();
+    }
+
     // RF-62: ruta que existe, con un registro que no existe
     public function test_a_missing_record_shows_the_spanish_404_page(): void
     {
