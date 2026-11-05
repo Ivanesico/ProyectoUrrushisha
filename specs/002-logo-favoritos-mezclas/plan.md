@@ -17,7 +17,7 @@ No se crean imágenes ni tests nuevos. Las tres imágenes del logo **sustituyen*
 | `public/images/logo-urrushisha.png` | Se sustituye por el logo nuevo redimensionado a 176x151 (las mismas medidas que el actual). | RF-1, 4 |
 | `public/images/logo-urrushisha-grande.png` | Se sustituye por el logo nuevo redimensionado a 400x342. | RF-2, 4 |
 | `public/images/favicon-urrushisha.png` | Se sustituye por el logo nuevo redimensionado a 64x55. | RF-3 |
-| `resources/views/favorites/index.blade.php` | Solo CSS: `.flavor-image` sin `padding` y con `background: #ffffff`. `.flavor-image-wrapper` conserva su degradado, que solo se ve cuando no hay foto (el marcador con la inicial). | RF-5 a 8 |
+| `resources/views/favorites/index.blade.php` | Solo CSS de `.flavor-image`. En la T2 se quitó el `padding` y el fondo pasó a `#ffffff`; en la T4, `object-fit` pasa de `contain` a `cover`. `.flavor-image-wrapper` conserva su degradado, que solo se ve cuando no hay foto (el marcador con la inicial). | RF-5 a 8 |
 | `resources/views/mixes/index.blade.php` | Usa el parcial. Miniaturas de 4rem en la tarjeta y de 6rem en la ventana, con el mismo fondo, margen y borde. Tarjeta pulsable con `role="button"`, `tabindex="0"`, `aria-label` y apertura con clic e Intro. Las acciones de la tarjeta hacen `stopPropagation`. Una ventana modal de Bootstrap por mezcla, oscura y translúcida, con Editar y Eliminar. | RF-9 a 19 |
 | `tests/Feature/MixTest.php` | Tests de la ventana (ver sección 8). | RF-13, 15, 16, 19 |
 | `tests/Feature/ErrorPagesTest.php` | La página 404 sin sesión muestra el logo de la barra. | RF-1 |
@@ -56,8 +56,10 @@ Sin cambios en controladores ni en Form Requests. La ventana se pinta en el serv
 - El navbar sigue mostrando el texto "URRUSHISHA" a la derecha del logo.
 
 ### Favoritos (RF-5 a 8)
-- La foto se sigue mostrando con `object-fit: contain`, así que se ve entera.
-- Se quitan el margen interior y el fondo lavanda: el fondo blanco de la foto es igual al de la tarjeta (`#ffffff`).
+- Cambio del 2026-11-05 (T4): la foto usa `object-fit: cover`, igual que el catálogo (`object-position` por defecto, centrado). Llena todo el hueco 4:3 sin deformarse y recorta lo que sobra por los bordes, así que no quedan bandas (RF-5, 6).
+- Se mantienen `position: absolute; inset: 0; width: 100%; height: 100%`, sin `padding`, como dejó la T2.
+- Se mantiene el `background: #ffffff`, que solo se nota detrás de las zonas transparentes de un PNG. Con `cover` no hay bandas.
+- Las esquinas de arriba quedan redondeadas porque `.flavor-card` ya tiene `overflow: hidden` y `border-radius`.
 - El marcador con la inicial sigue igual: si no hay foto o no carga, `onerror` quita el `<img>` y se ve el degradado con la inicial.
 - La ventana de detalle de sabor (`.flavor-modal-*`) no se toca.
 
@@ -112,7 +114,9 @@ Sin cambios en controladores ni en Form Requests. La ventana se pinta en el serv
    - Descartado: una sola ventana propia rellenada con JavaScript desde atributos `data-*`, como la de sabor. Habría que serializar la lista de sabores y construir el DOM en JS, con más código y más riesgo al escapar textos. El número de mezclas de un usuario es pequeño, así que repetir el HTML no pesa.
 4. **Parcial `_mix-items`.** Evita duplicar la barra y la lista entre la tarjeta y la ventana, y garantiza los mismos colores en las dos (RF-13).
    - Descartado: copiar el bloque en la vista, porque los dos se desincronizarían.
-5. **Favoritos: solo CSS de `.flavor-image`.** El degradado del contenedor solo se ve sin foto, porque la foto ocupa todo el hueco.
+5. **Favoritos: solo CSS de `.flavor-image`, con `object-fit: cover` (cambio del 2026-11-05).** Es lo mismo que usa el catálogo y elimina las bandas con cualquier fondo de foto. El degradado del contenedor solo se ve sin foto.
+   - Descartado: `contain` sobre fondo blanco (lo que se implementó en la T2). Deja bandas blancas en las fotos con fondo de color, como el rojo.
+   - Descartado: `contain` con un fondo tomado del color de la foto. Exigiría analizar la imagen, con GD desactivado o en JavaScript.
    - Descartado: tocar la estructura de la tarjeta o el catálogo, que queda fuera de alcance.
 
 ## 8. Estrategia de tests (`php artisan test`)

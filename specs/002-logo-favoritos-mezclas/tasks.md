@@ -46,3 +46,13 @@ Plan: `plan.md`. Una tarea cada vez: tests primero, después el cambio, `php art
       - la ventana se abre al pulsar una tarjeta y se cierra con Escape;
       - Editar y Eliminar de la tarjeta no la abren;
       - la consola no muestra errores.
+
+- [x] **T4. Foto de Favoritos que llena todo el hueco (cambio del 2026-11-05).** RF-5, RF-6, RF-7, RF-8
+  - Archivo: `resources/views/favorites/index.blade.php`, solo el CSS de `.flavor-image`: `object-fit` pasa de `contain` a `cover`. No se toca nada más: ni `.flavor-image-wrapper`, ni el catálogo, ni la ventana de detalle de sabor.
+  - Sin tests nuevos, porque es un cambio visual.
+  - Hecho cuando:
+    - En Favoritos, la foto llena todo el hueco de arriba de la tarjeta, sin bandas blancas ni de otro color, sin deformarse y con un poco de recorte en los bordes, también con una foto de fondo rojo.
+    - Sin foto, o si no carga, se ve la inicial sobre el degradado.
+    - El catálogo y la ventana de detalle de sabor no cambian.
+    - `php artisan test` está en verde.
+    - Comprobación rápida a 375 px y en la consola.

@@ -6,7 +6,7 @@ Estado: aprobada
 El usuario quiere tres mejoras visuales:
 
 1. Cambiar el logo por la versión nueva, con el nombre en mayúsculas ("URRUSHISHA"). El archivo lo ha facilitado el usuario: `LOGO-URRUSHISHA (1).png`.
-2. En Favoritos, el hueco de la foto tiene un fondo lavanda y un margen interior que no coinciden con el blanco de la tarjeta, y se nota el corte. La foto debe verse entera, sobre el mismo fondo que la tarjeta.
+2. En Favoritos, la foto no llenaba su hueco: quedaban bandas con un fondo distinto al de la foto (lavanda primero; blancas después, con las fotos de fondo rojo). La foto debe llenar todo el hueco, como en el catálogo, aunque se recorte un poco por los bordes.
 3. En Mezclas, poder abrir una mezcla en grande, a modo de tarjeta, y que las fotos de los sabores del listado sean algo más grandes.
 
 Ninguna de las mejoras cambia los datos guardados, las rutas ni los permisos.
@@ -17,18 +17,19 @@ Ninguna de las mejoras cambia los datos guardados, las rutas ni los permisos.
   - Ve el logo nuevo en login y registro.
   - Ve el logo de la barra superior en las páginas de error 403 y 404. En login y registro la barra superior no se muestra.
   - Ve el icono de la pestaña.
-- **Usuario registrado**: ve el logo nuevo en la barra superior, los favoritos con el fondo nuevo, y sus mezclas con las fotos más grandes y la ventana de detalle.
+- **Usuario registrado**: ve el logo nuevo en la barra superior, los favoritos con la foto llenando su hueco, y sus mezclas con las fotos más grandes y la ventana de detalle.
 - **Admin**: lo mismo que el usuario registrado. No tiene nada específico en esta spec.
 
 ## Historias de usuario
 
 - HU-1. Como visitante o usuario, quiero ver el logo nuevo en toda la web para que la imagen de marca sea la actual.
-- HU-2. Como usuario registrado, quiero ver la foto entera de mis favoritos, sin un fondo distinto al de la tarjeta, para reconocer la lata y que la tarjeta se vea limpia.
+- HU-2. Como usuario registrado, quiero que la foto de mis favoritos llene toda la parte de arriba de la tarjeta, sin bandas de otro color, para que la tarjeta se vea limpia aunque la foto tenga un fondo de color.
 - HU-3. Como usuario registrado, quiero pulsar una mezcla y verla en grande para ver mejor sus sabores y proporciones.
 
 ## Definiciones
 
 - **Logo nuevo**: la imagen del archivo `LOGO-URRUSHISHA (1).png` que ha facilitado el usuario: PNG con transparencia, de 748x640 px y 311 KB.
+- **Hueco de la foto (Favoritos)**: la parte de arriba de la tarjeta de Favoritos, que ocupa todo su ancho, donde va la foto del sabor o, si no hay, la inicial.
 - **Ventana de la mezcla**: ventana emergente que se abre encima del listado de Mezclas. Se comporta como la ventana de detalle de sabor (abrir y cerrar), pero con el aspecto de la tarjeta de mezcla del listado: oscura y translúcida, con el texto en blanco. No usa el aspecto claro de la ventana de sabor.
 
 ## Requisitos funcionales
@@ -44,8 +45,8 @@ Nota para el plan: el plan decidirá si se usa el PNG original o copias redimens
 
 ### Favoritos
 
-- RF-5: MIENTRAS un favorito tiene foto, EL SISTEMA la muestra entera en su tarjeta de Favoritos, sin recortarla.
-- RF-6: EL SISTEMA da al hueco de la foto de cada tarjeta de Favoritos el mismo fondo blanco que la tarjeta, sin degradado lavanda y sin margen interior entre el borde del hueco y la foto.
+- RF-5: MIENTRAS un favorito tiene foto, EL SISTEMA hace que la foto llene todo el hueco de su tarjeta de Favoritos, a lo ancho y a lo alto, sin deformarla. Si la proporción de la foto no coincide con la del hueco, recorta lo que sobre por los bordes, igual que en el catálogo.
+- RF-6: MIENTRAS un favorito tiene foto, EL SISTEMA no deja dentro del hueco ninguna banda ni margen de otro color alrededor de la foto.
 - RF-7: MIENTRAS un favorito no tiene foto, o la foto no carga, EL SISTEMA muestra el mismo marcador con la inicial que ahora.
 - RF-8: EL SISTEMA mantiene sin cambios las fotos del catálogo y las de la ventana de detalle de sabor, tanto en el catálogo como en Favoritos.
 
@@ -90,11 +91,14 @@ Nota para el plan: el plan decidirá si se usa el PNG original o copias redimens
 - Una mezcla sin fecha de creación: no se muestra la fecha, ni en el listado ni en la ventana.
 - Nombres de mezcla, sabor o notas muy largos: el texto se corta en varias líneas dentro de la ventana, sin salirse de ella.
 - Un porcentaje muy pequeño (1 %): su tramo sigue siendo visible en la barra de la ventana, igual que en el listado.
-- Una foto de favorito con su propio fondo pintado (por ejemplo, un damero falso o un color distinto del blanco): el fondo de la foto se seguirá notando, pero no se arregla en esta spec (ver Fuera de alcance).
+- Una foto de favorito más ancha o más alta que el hueco: llena el hueco y pierde un poco por los lados o por arriba y abajo, sin deformarse.
+- Una foto de favorito con un fondo de color (por ejemplo, rojo): el fondo ocupa todo el hueco, sin bandas de otro color.
+- Una foto de favorito con un fondo pintado que imita la transparencia (un damero falso): se sigue viendo el damero, porque está dentro de la foto. No se arregla en esta spec (ver Fuera de alcance).
 
 ## Fuera de alcance
 
-- Arreglar las fotos de sabores que traen su propio fondo pintado: la spec solo cambia el fondo y el margen del hueco de la foto en Favoritos. Esas fotos se arreglan subiendo otra imagen desde el admin.
+- Arreglar las fotos de sabores que traen un fondo pintado dentro de la imagen (como el damero falso): la spec solo cambia cómo se ajusta la foto al hueco en Favoritos. Esas fotos se arreglan subiendo otra imagen desde el admin.
+- Elegir qué parte de la foto se recorta: siempre se centra.
 - Cambiar las fotos del catálogo o de la ventana de detalle de sabor, y el fondo de las fotos de Mezclas.
 - Una página propia o una dirección para cada mezcla, compartir mezclas o ver las de otros usuarios.
 - Cambiar los colores de la barra de porcentajes: se mantienen los 6 colores fijos actuales, asignados según la posición del sabor en la mezcla.
@@ -112,10 +116,14 @@ Nota para el plan: el plan decidirá si se usa el PNG original o copias redimens
   - el logo de la barra con sesión y en las páginas 403 y 404 sin sesión;
   - el logo de login y registro;
   - el favicon de la pestaña. El navegador lo guarda en caché, así que puede hacer falta recargar sin caché o abrir una ventana privada para ver el nuevo;
-  - la tarjeta de Favoritos;
+  - la tarjeta de Favoritos: la foto llena el hueco sin bandas, también con una foto de fondo rojo, y sin foto se ve la inicial;
   - el listado de Mezclas;
   - la ventana de la mezcla: abrir con clic e Intro, cerrar con el botón, al pulsar fuera y con Escape, Editar, y Eliminar tanto cancelando como confirmando.
 
 ## Dudas abiertas
 
 Ninguna.
+
+## Historial de cambios
+
+- 2026-11-05: en Favoritos, la foto pasa de verse entera sobre fondo blanco a llenar todo el hueco, aunque se recorte un poco, igual que en el catálogo. Motivo: las fotos con fondo de color (por ejemplo, rojo) dejaban bandas blancas. Cambian el contexto, HU-2, RF-5, RF-6, los casos límite, Fuera de alcance y los criterios de finalización. Se implementa en la T4.
