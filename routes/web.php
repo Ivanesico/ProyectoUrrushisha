@@ -51,6 +51,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/mixes/{mix}/edit', [MixController::class, 'edit'])->name('mixes.edit');
     Route::put('/mixes/{mix}', [MixController::class, 'update'])->name('mixes.update');
     Route::delete('/mixes/{mix}', [MixController::class, 'destroy'])->name('mixes.destroy');
+    // Guardar una copia de una mezcla pública (spec 008)
+    Route::post('/mixes/{mix}/save', [MixController::class, 'saveCopy'])->name('mixes.save');
 
     Route::get('/favorites', [FavoriteController::class, 'index'])->name('favorites.index');
     Route::post('/favorites/{flavor}', [FavoriteController::class, 'store'])->name('favorites.store');

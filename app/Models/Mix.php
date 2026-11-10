@@ -32,6 +32,11 @@ class Mix extends Model {
         return $this->hasMany(MixItem::class, 'mix_id','id');
     }
 
+    // Spec 008: mezcla pública de la que esta es copia (null si no es copia o si la original se borró).
+    public function source() {
+        return $this->belongsTo(Mix::class, 'source_mix_id', 'id');
+    }
+
     /**
      * Spec 007: mezclas públicas con todos sus sabores públicos, sin las de $excludeUserId,
      * filtradas por nombre (`name`), sabor que contienen (`flavor`) y categoría (`category_id`).

@@ -9,12 +9,15 @@ use App\Models\Mix;
 use App\Models\Flavor;
 use App\Models\MixItem;
 use App\Models\Category;
+use App\Models\Favorite;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 
 class MixController extends Controller {
 
     public function index() {
-        $mixes = Mix::with(['items.flavor.brand'])
+        // source.user: "Guardada de <autor>" en las copias (spec 008), solo con id y nombre.
+        $mixes = Mix::with(['items.flavor.brand', 'source.user:id,name'])
                 ->where('user_id', auth()->id())
                 ->latest()
                 ->get();
@@ -57,10 +60,78 @@ class MixController extends Controller {
 
         $categories = Category::orderBy('name')->get();
 
-        return view('mixes.index', compact('mixes', 'filters', 'sort', 'categories') + [
+        // Mezclas de esta página que el usuario ya ha guardado (spec 008): su botón sale como "Guardada".
+        $savedSourceIds = auth()->check()
+                ? Mix::where('user_id', auth()->id())
+                        ->whereIn('source_mix_id', $mixes->pluck('id'))
+                        ->pluck('source_mix_id')
+                        ->map(fn ($id) => (int) $id)
+                        ->all()
+                : [];
+
+        return view('mixes.index', compact('mixes', 'filters', 'sort', 'categories', 'savedSourceIds') + [
             'tab' => 'public',
             'sorts' => self::PUBLIC_SORTS,
         ]);
+    }
+
+    /**
+     * Spec 008: guarda una copia privada de una mezcla pública en "Mis mezclas" y añade a
+     * favoritos los sabores que falten. Solo vale para una mezcla que el usuario ve en "Públicas".
+     * Una segunda vez no crea otra copia (también lo impide el único de la base de datos).
+     */
+    public function saveCopy(Request $request, Mix $mix) {
+        $userId = auth()->id();
+
+        $original = Mix::with('items')
+                ->publicListing([], $userId)
+                ->whereKey($mix->id)
+                ->firstOrFail();
+
+        $alreadySaved = Mix::where('user_id', $userId)->where('source_mix_id', $original->id)->exists();
+
+        if (!$alreadySaved) {
+            try {
+                DB::transaction(function () use ($original, $userId) {
+                    $copy = new Mix([
+                        'user_id' => $userId,
+                        'name' => $original->name,
+                        'notes' => $original->notes,
+                        'is_public' => false,
+                    ]);
+                    $copy->source_mix_id = $original->id;
+                    $copy->save();
+
+                    // mix_items.role no se usa: solo se copian sabor y porcentaje.
+                    foreach ($original->items as $item) {
+                        MixItem::create([
+                            'mix_id' => $copy->id,
+                            'flavor_id' => $item->flavor_id,
+                            'ratio' => $item->ratio,
+                        ]);
+                    }
+
+                    // favorites no tiene id: se insertan solo los que faltan.
+                    $flavorIds = $original->items->pluck('flavor_id')->unique();
+                    $existing = Favorite::where('user_id', $userId)->whereIn('flavor_id', $flavorIds)->pluck('flavor_id');
+
+                    foreach ($flavorIds->diff($existing) as $flavorId) {
+                        Favorite::create(['user_id' => $userId, 'flavor_id' => $flavorId]);
+                    }
+                });
+            } catch (UniqueConstraintViolationException) {
+                // Otra petición la guardó a la vez: el resultado es el mismo.
+                $alreadySaved = true;
+            }
+        }
+
+        $message = $alreadySaved ? 'Ya está en Mis mezclas.' : 'Guardada en Mis mezclas.';
+
+        if ($request->expectsJson()) {
+            return response()->json(['saved' => true, 'message' => $message]);
+        }
+
+        return back()->with('success', $message);
     }
 
     public function create() {

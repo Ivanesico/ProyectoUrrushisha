@@ -141,12 +141,31 @@
                      onkeydown="if (event.key === 'Enter' && event.target === this) openMixModal({{ $mix->id }})">
                 <header class="mix-card-header">
                     @if($isMine)
-                    <h2 class="mix-card-name">{{ $mix->name }}</h2>
+                    <div class="min-w-0">
+                        <h2 class="mix-card-name">{{ $mix->name }}</h2>
+                        @if($mix->source?->user)
+                        <p class="mix-author">Guardada de {{ $mix->source->user->name }}</p>
+                        @endif
+                    </div>
                     <span class="mix-visibility {{ $mix->is_public ? 'is-public' : '' }}">{{ $mix->is_public ? 'Pública' : 'Privada' }}</span>
                     @else
                     <div class="min-w-0">
                         <h2 class="mix-card-name">{{ $mix->name }}</h2>
                         <p class="mix-author">por {{ $mix->user->name ?? 'un usuario' }}</p>
+                    </div>
+
+                    {{-- Guardar una copia (spec 008); no abre la ventana --}}
+                    <div class="flex-shrink-0" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
+                        @guest
+                        <a href="{{ route('login') }}" class="mix-save" title="Inicia sesión para guardar" aria-label="Inicia sesión para guardar {{ $mix->name }}"><svg class="mix-save-icon" aria-hidden="true"><use href="#mix-icon-bookmark"></use></svg></a>
+                        @elseif(in_array($mix->id, $savedSourceIds, true))
+                        <button type="button" class="mix-save is-saved" title="Guardada en Mis mezclas" aria-label="{{ $mix->name }} ya está en Mis mezclas" disabled><svg class="mix-save-icon" aria-hidden="true"><use href="#mix-icon-bookmark"></use></svg></button>
+                        @else
+                        <form action="{{ route('mixes.save', $mix) }}" method="POST" class="m-0" data-mix-save="{{ $mix->id }}" data-mix-name="{{ $mix->name }}">
+                            @csrf
+                            <button type="submit" class="mix-save" title="Guardar en Mis mezclas" aria-label="Guardar {{ $mix->name }} en Mis mezclas"><svg class="mix-save-icon" aria-hidden="true"><use href="#mix-icon-bookmark"></use></svg></button>
+                        </form>
+                        @endguest
                     </div>
                     @endif
                 </header>
@@ -194,7 +213,21 @@
                         <h2 class="mix-card-name mix-modal-name" id="mixModalTitle-{{ $mix->id }}">{{ $mix->name }}</h2>
                         @if($isMine)
                         <span class="mix-visibility {{ $mix->is_public ? 'is-public' : '' }}">{{ $mix->is_public ? 'Pública' : 'Privada' }}</span>
+                        @if($mix->source?->user)
+                        <p class="mix-author w-100">Guardada de {{ $mix->source->user->name }}</p>
+                        @endif
                         @else
+                        {{-- Guardar una copia (spec 008) --}}
+                        @guest
+                        <a href="{{ route('login') }}" class="mix-save" title="Inicia sesión para guardar" aria-label="Inicia sesión para guardar {{ $mix->name }}"><svg class="mix-save-icon" aria-hidden="true"><use href="#mix-icon-bookmark"></use></svg></a>
+                        @elseif(in_array($mix->id, $savedSourceIds, true))
+                        <button type="button" class="mix-save is-saved" title="Guardada en Mis mezclas" aria-label="{{ $mix->name }} ya está en Mis mezclas" disabled><svg class="mix-save-icon" aria-hidden="true"><use href="#mix-icon-bookmark"></use></svg></button>
+                        @else
+                        <form action="{{ route('mixes.save', $mix) }}" method="POST" class="m-0" data-mix-save="{{ $mix->id }}" data-mix-name="{{ $mix->name }}">
+                            @csrf
+                            <button type="submit" class="mix-save" title="Guardar en Mis mezclas" aria-label="Guardar {{ $mix->name }} en Mis mezclas"><svg class="mix-save-icon" aria-hidden="true"><use href="#mix-icon-bookmark"></use></svg></button>
+                        </form>
+                        @endguest
                         <p class="mix-author w-100">por {{ $mix->user->name ?? 'un usuario' }}</p>
                         @endif
                     </div>
@@ -232,6 +265,14 @@
 </div>
 
 @if(!$isMine)
+{{-- Icono de marcador del botón de guardar: vacío para guardar, relleno si ya está guardada (spec 008) --}}
+<svg width="0" height="0" class="position-absolute" aria-hidden="true">
+    <symbol id="mix-icon-bookmark" viewBox="0 0 24 24"><path d="M6.5 3.5h11a1 1 0 0 1 1 1v16l-6.5-4.2-6.5 4.2v-16a1 1 0 0 1 1-1z"/></symbol>
+</svg>
+
+{{-- Aviso al guardar una mezcla sin recargar (spec 008) --}}
+<div id="mixToasts" class="toast-container position-fixed start-50 translate-middle-x mix-toasts" aria-live="polite" aria-atomic="true"></div>
+
 @include('partials._filter-dropdown')
 @endif
 @endsection
@@ -590,6 +631,71 @@
         min-width: 0;
     }
 
+    /* Spec 008: icono de marcador para guardar una copia de una mezcla pública */
+    .mix-save {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        flex-shrink: 0;
+        padding: 0;
+        border: 1px solid var(--us-line);
+        border-radius: 50%;
+        background: transparent;
+        color: var(--us-text-strong);
+        transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .mix-save:hover {
+        border-color: #f472b6;
+        background: var(--us-hover);
+        color: #f472b6;
+    }
+
+    .mix-save:focus-visible {
+        outline: 2px solid #f472b6;
+        outline-offset: 2px;
+    }
+
+    .mix-save-icon {
+        width: 1.25rem;
+        height: 1.25rem;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linejoin: round;
+    }
+
+    /* Guardada: marcador relleno */
+    .mix-save.is-saved,
+    .mix-save:disabled {
+        border-color: rgba(236, 72, 153, 0.55);
+        background: transparent;
+        color: #ec4899;
+        cursor: default;
+        opacity: 1;
+    }
+
+    .mix-save.is-saved .mix-save-icon {
+        fill: currentColor;
+    }
+
+    .mix-toasts {
+        top: 4.75rem;
+        z-index: 1090;
+        width: max-content;
+        max-width: calc(100vw - 2rem);
+    }
+
+    .mix-toast {
+        border: 1px solid var(--us-line);
+        border-radius: 999px;
+        background: #1b1426;
+        color: var(--us-text-strong);
+        font-weight: 600;
+    }
+
     /* Panel de filtros, "Ordenar por" y paginación: el mismo aspecto que la portada y el admin de sabores */
     .mixes-page .btn-modern {
         border-radius: 999px;
@@ -829,5 +935,67 @@
         const open = document.getElementById('filtersContent').classList.toggle('show');
         button.setAttribute('aria-expanded', open ? 'true' : 'false');
     }
+
+    // Spec 008: guardar una mezcla sin recargar. Si fetch falla, se envía el formulario como siempre.
+    function showMixToast(message) {
+        const container = document.getElementById('mixToasts');
+        if (!container || !window.bootstrap || !bootstrap.Toast) return;
+
+        const toast = document.createElement('div');
+        toast.className = 'toast mix-toast';
+        toast.setAttribute('role', 'status');
+
+        const body = document.createElement('div');
+        body.className = 'toast-body';
+        body.textContent = message;
+        toast.appendChild(body);
+
+        container.appendChild(toast);
+        toast.addEventListener('hidden.bs.toast', function () { toast.remove(); });
+        new bootstrap.Toast(toast, { delay: 2500 }).show();
+    }
+
+    // La tarjeta y la ventana de la misma mezcla cambian a la vez.
+    function markMixSaved(mixId) {
+        document.querySelectorAll('form[data-mix-save="' + mixId + '"]').forEach(function (form) {
+            // Reutiliza el botón con su icono: solo cambia a marcador relleno y desactivado.
+            const saved = form.querySelector('button').cloneNode(true);
+            const name = form.dataset.mixName;
+            saved.type = 'button';
+            saved.className = 'mix-save is-saved';
+            saved.disabled = true;
+            saved.title = 'Guardada en Mis mezclas';
+            saved.setAttribute('aria-label', name + ' ya está en Mis mezclas');
+            form.replaceWith(saved);
+        });
+    }
+
+    document.querySelectorAll('form[data-mix-save]').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            if (!window.fetch) return;
+            event.preventDefault();
+
+            const button = form.querySelector('button');
+            button.disabled = true;
+
+            fetch(form.action, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: new FormData(form),
+                credentials: 'same-origin'
+            })
+                .then(function (response) {
+                    if (!response.ok) throw new Error('save failed');
+                    return response.json();
+                })
+                .then(function (data) {
+                    markMixSaved(form.dataset.mixSave);
+                    showMixToast(data.message);
+                })
+                .catch(function () {
+                    form.submit();
+                });
+        });
+    });
 </script>
 @endpush

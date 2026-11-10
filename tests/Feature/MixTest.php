@@ -1152,6 +1152,183 @@ class MixTest extends TestCase
             ->assertDontSee('Todavía no hay mezclas públicas');
     }
 
+    // Spec 008, RF2: la copia es privada, propia, con el mismo nombre, notas, sabores y porcentajes, y apunta a la original.
+    public function test_saving_a_public_mix_creates_a_private_copy(): void
+    {
+        $original = $this->foreignMix('Noche de verano', [$this->first->id => 60, $this->notFavorite->id => 40], ['notes' => 'Con hielo']);
+
+        $this->post(route('mixes.save', $original))->assertRedirect();
+
+        $copy = Mix::where('user_id', $this->user->id)->sole();
+
+        $this->assertSame('Noche de verano', $copy->name);
+        $this->assertSame('Con hielo', $copy->notes);
+        $this->assertFalse((bool) $copy->is_public);
+        $this->assertSame($original->id, (int) $copy->source_mix_id);
+        $this->assertEquals([$this->first->id => 60, $this->notFavorite->id => 40], $this->savedRatios($copy));
+        $this->assertEquals([$this->first->id => 60, $this->notFavorite->id => 40], $this->savedRatios($original));
+    }
+
+    // Spec 008, RF2: los sabores que faltaban pasan a favoritos, sin duplicar los que ya estaban.
+    public function test_saving_adds_the_missing_flavors_to_favorites(): void
+    {
+        $original = $this->foreignMix('Noche', [$this->first->id => 60, $this->notFavorite->id => 40]);
+        $authorFavorites = Favorite::where('user_id', $original->user_id)->count();
+
+        $this->post(route('mixes.save', $original));
+
+        $this->assertEqualsCanonicalizing(
+            [$this->first->id, $this->second->id, $this->notFavorite->id],
+            Favorite::where('user_id', $this->user->id)->pluck('flavor_id')->all()
+        );
+        $this->assertSame(1, Favorite::where('user_id', $this->user->id)->where('flavor_id', $this->first->id)->count());
+        $this->assertSame($authorFavorites, Favorite::where('user_id', $original->user_id)->count());
+    }
+
+    // Spec 008, RF3: guardar dos veces no crea otra copia; tras borrarla, se puede volver a guardar.
+    public function test_a_mix_can_only_be_saved_once_until_the_copy_is_deleted(): void
+    {
+        $original = $this->foreignMix('Noche');
+
+        $this->post(route('mixes.save', $original));
+        $this->post(route('mixes.save', $original))
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Ya está en Mis mezclas.');
+
+        $this->assertSame(1, Mix::where('user_id', $this->user->id)->count());
+
+        $copy = Mix::where('user_id', $this->user->id)->sole();
+        $this->delete(route('mixes.destroy', $copy));
+        $this->post(route('mixes.save', $original));
+
+        $this->assertSame(1, Mix::where('user_id', $this->user->id)->count());
+        $this->assertSame(2, Mix::count());
+    }
+
+    // Spec 008, RF2: solo se guarda lo que sale en "Públicas"; si no, 404 sin cambios.
+    public function test_only_a_mix_listed_as_public_can_be_saved(): void
+    {
+        $hidden = Flavor::factory()->notPublic()->create();
+        $private = $this->foreignMix('Privada', [], ['is_public' => false]);
+        $withHidden = $this->foreignMix('Con oculto', [$this->first->id => 50, $hidden->id => 50]);
+        $own = $this->savedMix([], ['name' => 'Mía']);
+        $before = [Mix::count(), MixItem::count(), Favorite::count()];
+
+        foreach ([$private, $withHidden, $own] as $mix) {
+            $this->post(route('mixes.save', $mix))->assertNotFound();
+        }
+        $this->post('/mixes/999999/save')->assertNotFound();
+
+        $this->assertSame($before, [Mix::count(), MixItem::count(), Favorite::count()]);
+    }
+
+    // Spec 008, RF4: con fetch responde JSON.
+    public function test_saving_with_fetch_answers_json(): void
+    {
+        $original = $this->foreignMix('Noche');
+
+        $this->postJson(route('mixes.save', $original))
+            ->assertOk()
+            ->assertExactJson(['saved' => true, 'message' => 'Guardada en Mis mezclas.']);
+
+        $this->postJson(route('mixes.save', $original))
+            ->assertOk()
+            ->assertExactJson(['saved' => true, 'message' => 'Ya está en Mis mezclas.']);
+    }
+
+    // Spec 008, RF5: un visitante va a login y no se guarda nada.
+    public function test_a_guest_cannot_save_a_mix(): void
+    {
+        $original = $this->foreignMix('Noche');
+        auth()->logout();
+
+        $this->post(route('mixes.save', $original))->assertRedirect(route('login'));
+
+        $this->assertSame(1, Mix::count());
+    }
+
+    // Spec 008, RF1: si se borra la original, la copia se queda sin origen.
+    public function test_deleting_the_original_keeps_the_copy_without_source(): void
+    {
+        $original = $this->foreignMix('Noche');
+        $this->post(route('mixes.save', $original));
+
+        $original->items()->delete();
+        $original->delete();
+
+        $copy = Mix::where('user_id', $this->user->id)->sole();
+        $this->assertNull($copy->source_mix_id);
+        $this->assertSame(1, $copy->items()->count());
+    }
+
+    // Spec 008, RF5: con sesión, "Guardar" en la tarjeta y en la ventana.
+    public function test_public_mixes_have_a_save_button_in_the_card_and_the_window(): void
+    {
+        $mix = $this->foreignMix('Noche');
+
+        $content = $this->get(route('mixes.public'))->assertOk()->getContent();
+
+        $this->assertSame(2, substr_count($content, 'action="'.route('mixes.save', $mix).'"'));
+        $this->assertSame(2, substr_count($content, 'data-mix-save="'.$mix->id.'"'));
+        // Icono de marcador vacío, sin texto (RF5).
+        $this->assertSame(2, substr_count($content, '<button type="submit" class="mix-save" title="Guardar en Mis mezclas" aria-label="Guardar Noche en Mis mezclas"><svg class="mix-save-icon" aria-hidden="true"><use href="#mix-icon-bookmark"></use></svg></button>'));
+        $this->assertStringNotContainsString('class="mix-save is-saved"', $content);
+    }
+
+    // Spec 008, RF5: si ya está guardada, "Guardada" desactivado en los dos sitios.
+    public function test_an_already_saved_mix_shows_saved_disabled(): void
+    {
+        $mix = $this->foreignMix('Noche');
+        $other = $this->foreignMix('Otra');
+        $this->post(route('mixes.save', $mix));
+
+        $content = $this->get(route('mixes.public'))->assertOk()->getContent();
+
+        // Marcador relleno y desactivado (RF5).
+        $this->assertSame(2, substr_count($content, '<button type="button" class="mix-save is-saved" title="Guardada en Mis mezclas" aria-label="Noche ya está en Mis mezclas" disabled><svg class="mix-save-icon" aria-hidden="true"><use href="#mix-icon-bookmark"></use></svg></button>'));
+        $this->assertStringContainsString('<symbol id="mix-icon-bookmark"', $content);
+        $this->assertSame(2, substr_count($content, 'action="'.route('mixes.save', $other).'"'));
+        $this->assertStringNotContainsString('action="'.route('mixes.save', $mix).'"', $content);
+    }
+
+    // Spec 008, RF5: sin sesión, "Guardar" es un enlace a login.
+    public function test_for_a_guest_save_links_to_login(): void
+    {
+        $mix = $this->foreignMix('Noche');
+        auth()->logout();
+
+        $content = $this->get(route('mixes.public'))->assertOk()->getContent();
+
+        $this->assertSame(2, substr_count($content, '<a href="'.route('login').'" class="mix-save" title="Inicia sesión para guardar" aria-label="Inicia sesión para guardar Noche"><svg class="mix-save-icon" aria-hidden="true"><use href="#mix-icon-bookmark"></use></svg></a>'));
+        $this->assertStringNotContainsString(route('mixes.save', $mix), $content);
+    }
+
+    // Spec 008, RF6: en "Mis mezclas", la copia dice de quién era (sin email) y no hay botón de guardar.
+    public function test_my_copy_shows_who_the_original_was_from(): void
+    {
+        $author = User::factory()->create(['name' => 'Ana Autora', 'email' => 'ana.autora@example.com']);
+        $original = $this->foreignMix('Noche', [], ['user_id' => $author->id]);
+        $this->post(route('mixes.save', $original));
+        $this->savedMix([], ['name' => 'Propia']);
+
+        $response = $this->get(route('mixes.index'))->assertOk();
+
+        $this->assertSame(2, substr_count($response->getContent(), 'Guardada de Ana Autora'));
+        $response->assertDontSee('ana.autora@example.com');
+        $response->assertDontSee('class="mix-save', false);
+    }
+
+    // Spec 008, RF6: si la original ya no existe, no se muestra el crédito.
+    public function test_a_copy_without_original_shows_no_credit(): void
+    {
+        $original = $this->foreignMix('Noche');
+        $this->post(route('mixes.save', $original));
+        $original->items()->delete();
+        $original->delete();
+
+        $this->get(route('mixes.index'))->assertOk()->assertDontSee('Guardada de');
+    }
+
     // Spec 007, RF1: "Mis mezclas" sigue igual, con Editar, Eliminar y la etiqueta de visibilidad.
     public function test_my_mixes_keep_their_actions(): void
     {

@@ -16,7 +16,7 @@ use Tests\TestCase;
  *
  * Does not use RefreshDatabase: SQLite ignores the foreign keys PRAGMA inside a
  * transaction, so rebuilding the table within one would lose favorites or fail
- * because of mix_items. This test runs migrate:rollback, so setUp() refuses any
+ * because of mix_items. This test runs and reverts migrations, so setUp() refuses any
  * database other than in-memory SQLite before anything is executed.
  */
 class TobaccoTypeMigrationTest extends TestCase
@@ -250,8 +250,10 @@ class TobaccoTypeMigrationTest extends TestCase
      */
     private function prepareOldListWithRows(): void
     {
+        // Deshace solo esta migración (no "la última"): así no depende de las que vengan después (spec 008).
         $this->migrate();
-        $this->assertSame(0, Artisan::call('migrate:rollback', ['--step' => 1]));
+        $this->migrationInstance()->down();
+        DB::table('migrations')->where('migration', pathinfo(self::MIGRATION, PATHINFO_FILENAME))->delete();
 
         $this->insertBrandAndCategory();
         $this->assertTobaccoTypeRejected('rojo');
