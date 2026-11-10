@@ -103,6 +103,8 @@
                                 @enderror
                             </div>
 
+                            @include('admin.flavors._prices', ['flavor' => $flavor])
+
                             <div class="col-12">
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" name="is_public" id="is_public" value="1" {{ ($errors->any() ? old('is_public') : $flavor->is_public) ? 'checked' : '' }}>

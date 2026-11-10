@@ -77,6 +77,11 @@ class Flavor extends Model {
         return $this->hasMany(Favorite::class);
     }
 
+    // Spec 010: formatos del sabor, de menor a mayor cantidad.
+    public function prices() {
+        return $this->hasMany(FlavorPrice::class)->orderBy('grams');
+    }
+
     public function getInitialAttribute(): string {
         return mb_strtoupper(mb_substr($this->name, 0, 1));
     }

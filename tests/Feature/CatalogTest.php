@@ -1158,6 +1158,53 @@ class CatalogTest extends TestCase
         $response->assertDontSee('class="btn us-access', false);
     }
 
+    // Spec 010, RF4 y RF6: la tarjeta muestra "desde" con el precio más bajo, en formato español.
+    public function test_the_card_shows_the_lowest_price(): void
+    {
+        $flavor = Flavor::factory()->create(['name' => 'Menta']);
+        $flavor->prices()->createMany([['grams' => 200, 'price' => 39.9], ['grams' => 50, 'price' => 12.5]]);
+        $expensive = Flavor::factory()->create(['name' => 'Cara']);
+        $expensive->prices()->create(['grams' => 1000, 'price' => 1234.5]);
+
+        $response = $this->catalog();
+
+        $response->assertSee('<p class="flavor-price">desde 12,50 €</p>', false);
+        $response->assertSee('<p class="flavor-price">desde 1.234,50 €</p>', false);
+        $response->assertDontSee('desde 39,90 €');
+    }
+
+    // Spec 010, RF4 y RF5: sin precios no hay línea "desde" ni sección "Precios".
+    public function test_a_flavor_without_prices_shows_no_price(): void
+    {
+        Flavor::factory()->create(['name' => 'Menta']);
+
+        $response = $this->catalog();
+
+        $response->assertDontSee('class="flavor-price"', false);
+        $response->assertDontSee('class="flavor-detail-prices', false);
+    }
+
+    // Spec 010, RF5: la ventana lista cada formato de menor a mayor cantidad.
+    public function test_the_detail_window_lists_every_price_by_grams(): void
+    {
+        $flavor = Flavor::factory()->create(['name' => 'Menta']);
+        $flavor->prices()->createMany([['grams' => 200, 'price' => 39.9], ['grams' => 50, 'price' => 12.5], ['grams' => 70, 'price' => 15]]);
+
+        $response = $this->catalog();
+
+        $response->assertSeeInOrder(['Precios', '50 g · 12,50 €', '70 g · 15,00 €', '200 g · 39,90 €'], false);
+    }
+
+    // Spec 010, RF5: Favoritos usa la misma ventana y también muestra los precios.
+    public function test_favorites_show_the_prices_in_the_detail_window(): void
+    {
+        $flavor = Flavor::factory()->create(['name' => 'Menta']);
+        $flavor->prices()->create(['grams' => 50, 'price' => 12.5]);
+        Favorite::create(['user_id' => auth()->id(), 'flavor_id' => $flavor->id]);
+
+        $this->get(route('favorites.index'))->assertOk()->assertSee('50 g · 12,50 €');
+    }
+
     private function assertNoEnglishPagination(TestResponse $response): void
     {
         foreach (['Showing', 'Previous', 'Next', 'pagination.previous', 'pagination.next'] as $text) {

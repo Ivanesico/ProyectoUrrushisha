@@ -7,7 +7,9 @@ use App\Http\Requests\StoreFlavorRequest;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Flavor;
+use App\Models\FlavorPrice;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class FlavorController extends Controller {
 
@@ -96,17 +98,22 @@ class FlavorController extends Controller {
             $imagePath = $request->file('image')->store('flavors', 'public');
         }
 
-        Flavor::create([
-            'brand_id' => $request->brand_id,
-            'category_id' => $request->category_id,
-            'name' => $request->name,
-            'description' => $request->description,
-            'tobacco_type' => $request->tobacco_type,
-            'ingredients_text' => $request->ingredients_text,
-            'image_url' => $imagePath,
-            'created_by' => auth()->id(),
-            'is_public' => $request->boolean('is_public'),
-        ]);
+        // Spec 010: el sabor y sus precios se guardan juntos o no se guarda nada.
+        DB::transaction(function () use ($request, $imagePath) {
+            $flavor = Flavor::create([
+                'brand_id' => $request->brand_id,
+                'category_id' => $request->category_id,
+                'name' => $request->name,
+                'description' => $request->description,
+                'tobacco_type' => $request->tobacco_type,
+                'ingredients_text' => $request->ingredients_text,
+                'image_url' => $imagePath,
+                'created_by' => auth()->id(),
+                'is_public' => $request->boolean('is_public'),
+            ]);
+
+            self::replacePrices($flavor, $request);
+        });
 
         return redirect()
                         ->route('admin.flavors.index')
@@ -136,18 +143,39 @@ class FlavorController extends Controller {
             $imagePath = $request->file('image')->store('flavors', 'public');
         }
 
-        $flavor->update([
-            'brand_id' => $request->brand_id,
-            'category_id' => $request->category_id,
-            'name' => $request->name,
-            'description' => $request->description,
-            'tobacco_type' => $request->tobacco_type,
-            'ingredients_text' => $request->ingredients_text,
-            'image_url' => $imagePath,
-            'is_public' => $request->boolean('is_public'),
-        ]);
+        // Spec 010: el sabor y sus precios se guardan juntos o no se guarda nada.
+        DB::transaction(function () use ($request, $flavor, $imagePath) {
+            $flavor->update([
+                'brand_id' => $request->brand_id,
+                'category_id' => $request->category_id,
+                'name' => $request->name,
+                'description' => $request->description,
+                'tobacco_type' => $request->tobacco_type,
+                'ingredients_text' => $request->ingredients_text,
+                'image_url' => $imagePath,
+                'is_public' => $request->boolean('is_public'),
+            ]);
+
+            self::replacePrices($flavor, $request);
+        });
 
         return self::backToList($request)->with('success', 'Sabor actualizado correctamente.');
+    }
+
+    /**
+     * Spec 010: los precios del sabor pasan a ser exactamente los de las filas enviadas
+     * (sin filas, se queda sin precios). Se llama dentro de la transacción del sabor.
+     */
+    private static function replacePrices(Flavor $flavor, StoreFlavorRequest $request): void {
+        // Sin el orderBy de la relación: un DELETE con ORDER BY no es válido en Postgres.
+        FlavorPrice::where('flavor_id', $flavor->id)->delete();
+
+        foreach ($request->validated('prices') ?? [] as $row) {
+            $flavor->prices()->create([
+                'grams' => (int) $row['grams'],
+                'price' => $row['price'],
+            ]);
+        }
     }
 
     public function destroy(Request $request, Flavor $flavor) {

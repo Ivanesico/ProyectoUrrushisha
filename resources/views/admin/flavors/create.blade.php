@@ -91,6 +91,8 @@
                                 @enderror
                             </div>
 
+                            @include('admin.flavors._prices')
+
                             <div class="col-12">
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" name="is_public" id="is_public" value="1" {{ old('is_public') ? 'checked' : '' }}>

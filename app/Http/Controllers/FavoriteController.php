@@ -23,7 +23,7 @@ class FavoriteController extends Controller {
     // Se filtra y ordena en PHP: son solo los favoritos de un usuario, el resultado es igual
     // en MySQL y en Postgres, y un valor no válido de la URL nunca llega a una consulta.
     public function index(Request $request) {
-        $allFavorites = Favorite::with('flavor.brand', 'flavor.category')
+        $allFavorites = Favorite::with('flavor.brand', 'flavor.category', 'flavor.prices')
                 ->where('user_id', Auth::id())
                 ->get();
 

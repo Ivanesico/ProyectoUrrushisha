@@ -18,7 +18,8 @@ class FlavorController extends Controller {
 
         $filterKeys = ['name', 'brand_id', 'category_id', 'ingredient', 'tobacco_type'];
 
-        $query = Flavor::with(['brand', 'category'])
+        // prices: "desde" en la tarjeta y la lista de la ventana (spec 010), sin una consulta por sabor.
+        $query = Flavor::with(['brand', 'category', 'prices'])
                 ->where('is_public', true)
                 ->filteredBy($request->only($filterKeys));
 

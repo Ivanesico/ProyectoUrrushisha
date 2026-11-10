@@ -238,6 +238,11 @@
                         {{ \Illuminate\Support\Str::limit($flavor->ingredients_text ?? 'Sin ingredientes definidos', 50) }}
                     </div>
 
+                    {{-- Spec 010: el precio más bajo de sus formatos; sin precios, nada --}}
+                    @if($flavor->prices->isNotEmpty())
+                    <p class="flavor-price">desde {{ \App\Models\FlavorPrice::formatPrice($flavor->prices->min('price')) }}</p>
+                    @endif
+
 
                 </div>
 
@@ -546,6 +551,15 @@
 
     .favorite-btn.active {
         color: #e11d48;
+    }
+
+    /* Spec 010: precio más bajo en la tarjeta */
+    .flavor-price {
+        margin: 0;
+        /* La tarjeta es clara: rosa oscuro para que se lea bien */
+        color: #be185d;
+        font-size: 0.92rem;
+        font-weight: 700;
     }
 
     .flavor-image-wrapper {

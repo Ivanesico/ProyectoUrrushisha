@@ -43,6 +43,16 @@
                     <h3 class="flavor-detail-section">Ingredientes</h3>
                     <div class="flavor-detail-ingredients mb-4">{{ $flavor->ingredients_text ?: 'Sin ingredientes definidos' }}</div>
 
+                    {{-- Spec 010: cada formato de menor a mayor cantidad; sin precios, no aparece --}}
+                    @if($flavor->prices->isNotEmpty())
+                    <h3 class="flavor-detail-section">Precios</h3>
+                    <ul class="flavor-detail-prices mb-4">
+                        @foreach($flavor->prices as $price)
+                        <li>{{ $price->grams }} g · {{ \App\Models\FlavorPrice::formatPrice($price->price) }}</li>
+                        @endforeach
+                    </ul>
+                    @endif
+
                     <div class="d-flex flex-wrap gap-2">
                         {{-- Sin sesión lleva a iniciar sesión (spec 006) --}}
                         <a href="{{ auth()->check() ? route('mixes.create') : route('login') }}" class="btn flavor-detail-primary">Crear mezcla</a>
@@ -57,6 +67,26 @@
 @once
 @push('head')
 <style>
+    /* Spec 010: formatos y precios del sabor */
+    .flavor-detail-prices {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0;
+        list-style: none;
+    }
+
+    .flavor-detail-prices li {
+        padding: 0.35rem 0.85rem;
+        /* La ventana es clara: rosa oscuro para que se lea bien */
+        border: 1px solid rgba(190, 24, 93, 0.35);
+        border-radius: 999px;
+        background: #fdf2f8;
+        color: #be185d;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
     .flavor-detail-modal .modal-dialog {
         max-width: 480px;
         margin-left: auto;

@@ -1218,4 +1218,165 @@ class AdminFlavorTest extends TestCase
         $this->assertPublicCheckbox($this->get(route('admin.flavors.edit', $public))->assertOk()->getContent(), true);
         $this->assertPublicCheckbox($this->get(route('admin.flavors.edit', $hidden))->assertOk()->getContent(), false);
     }
+
+    /**
+     * Spec 010: precios guardados de un sabor, cantidad => precio con 2 decimales.
+     *
+     * @return array<int, string>
+     */
+    private function savedPrices(Flavor $flavor): array
+    {
+        return DB::table('flavor_prices')
+            ->where('flavor_id', $flavor->id)
+            ->orderBy('grams')
+            ->get()
+            ->mapWithKeys(fn ($row) => [(int) $row->grams => number_format((float) $row->price, 2, '.', '')])
+            ->all();
+    }
+
+    // Spec 010, RF2 y RF3: crear guarda los precios de las filas, con coma o con punto, e ignora las filas vacías.
+    public function test_creating_a_flavor_saves_its_prices(): void
+    {
+        $this->post(route('admin.flavors.store'), $this->payload(['prices' => [
+            ['grams' => '200', 'price' => '39,90'],
+            ['grams' => '', 'price' => ''],
+            ['grams' => '50', 'price' => '12.5'],
+        ]]))->assertRedirect(route('admin.flavors.index'));
+
+        $this->assertSame([50 => '12.50', 200 => '39.90'], $this->savedPrices(Flavor::sole()));
+    }
+
+    // Spec 010, RF2: editar reemplaza los precios por los de las filas; sin filas, el sabor se queda sin precios.
+    public function test_editing_a_flavor_replaces_its_prices(): void
+    {
+        $flavor = Flavor::factory()->create();
+        $flavor->prices()->createMany([['grams' => 50, 'price' => 10], ['grams' => 200, 'price' => 30]]);
+
+        $this->put(route('admin.flavors.update', $flavor), $this->payload(['prices' => [
+            ['grams' => '70', 'price' => '15,00'],
+            ['grams' => '200', 'price' => '32,50'],
+        ]]))->assertRedirect();
+
+        $this->assertSame([70 => '15.00', 200 => '32.50'], $this->savedPrices($flavor));
+
+        $this->put(route('admin.flavors.update', $flavor), $this->payload())->assertRedirect();
+
+        $this->assertSame([], $this->savedPrices($flavor));
+    }
+
+    /**
+     * Spec 010, RF3: cada error de precio con su mensaje en español.
+     *
+     * @return array<string, array{0: array<int|string, mixed>, 1: string}>
+     */
+    public static function invalidPrices(): array
+    {
+        $grams = 'La cantidad debe ser un número entero de gramos entre 1 y 5000.';
+        $price = 'El precio debe ser un importe entre 0,01 y 9999,99 € con como mucho 2 decimales.';
+
+        return [
+            'sin precio' => [[['grams' => '50', 'price' => '']], 'Indica el precio de cada cantidad.'],
+            'sin cantidad' => [[['grams' => '', 'price' => '12,50']], 'Indica la cantidad de cada precio.'],
+            'cantidad 0' => [[['grams' => '0', 'price' => '12,50']], $grams],
+            'cantidad 5001' => [[['grams' => '5001', 'price' => '12,50']], $grams],
+            'cantidad decimal' => [[['grams' => '50.5', 'price' => '12,50']], $grams],
+            'cantidad con texto' => [[['grams' => 'abc', 'price' => '12,50']], $grams],
+            'cantidad como array' => [[['grams' => ['50'], 'price' => '12,50']], $grams],
+            'precio 0' => [[['grams' => '50', 'price' => '0']], $price],
+            'precio 10000' => [[['grams' => '50', 'price' => '10000']], $price],
+            'precio con 3 decimales' => [[['grams' => '50', 'price' => '12,505']], $price],
+            'precio con texto' => [[['grams' => '50', 'price' => 'doce']], $price],
+            'precio como array' => [[['grams' => '50', 'price' => ['12']]], $price],
+            'cantidad repetida' => [[['grams' => '50', 'price' => '10'], ['grams' => '50', 'price' => '12']], 'No puedes repetir la misma cantidad.'],
+            'fila que no es lista' => [['abc'], 'Cada precio debe tener cantidad y precio.'],
+            'precios que no son lista' => ['abc', 'Los precios deben enviarse como una lista.'],
+            'más de 10 filas' => [array_map(fn ($n) => ['grams' => (string) $n, 'price' => '1'], range(1, 11)), 'Puedes añadir como mucho 10 precios.'],
+        ];
+    }
+
+    // Spec 010, RF3: con un error de precio no se guarda nada, ni al crear ni al editar.
+    #[DataProvider('invalidPrices')]
+    public function test_an_invalid_price_saves_nothing_and_shows_its_message(array|string $prices, string $message): void
+    {
+        $this->from(route('admin.flavors.create'))
+            ->post(route('admin.flavors.store'), $this->payload(['prices' => $prices]))
+            ->assertRedirect(route('admin.flavors.create'))
+            ->assertSessionHasErrors();
+        $this->assertSame($message, collect(session('errors')->all())->first(fn ($error) => $error === $message));
+        $this->assertSame(0, Flavor::count());
+
+        $flavor = Flavor::factory()->create(['name' => 'Original']);
+        $flavor->prices()->create(['grams' => 100, 'price' => 20]);
+
+        $this->from(route('admin.flavors.edit', $flavor))
+            ->put(route('admin.flavors.update', $flavor), $this->payload(['name' => 'Cambiado', 'prices' => $prices]))
+            ->assertRedirect(route('admin.flavors.edit', $flavor));
+        $this->assertSame('Original', $flavor->fresh()->name);
+        $this->assertSame([100 => '20.00'], $this->savedPrices($flavor));
+    }
+
+    // Spec 010, RF2: crear tiene la sección "Precios" con una fila vacía y el botón para añadir más.
+    public function test_the_create_form_has_an_empty_price_row(): void
+    {
+        $html = $this->get(route('admin.flavors.create'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('>Precios</h2>', $html);
+        $this->assertMatchesRegularExpression('/name="prices\[0\]\[grams\]"[^>]*value=""/', $html);
+        $this->assertMatchesRegularExpression('/name="prices\[0\]\[price\]"[^>]*value=""/', $html);
+        $this->assertStringContainsString('id="add-price"', $html);
+        $this->assertStringContainsString('<template id="price-row-template">', $html);
+    }
+
+    // Spec 010, RF2 y RF6: editar muestra los precios guardados (con coma) más una fila vacía.
+    public function test_the_edit_form_shows_the_saved_prices_and_an_empty_row(): void
+    {
+        $flavor = Flavor::factory()->create();
+        $flavor->prices()->createMany([['grams' => 200, 'price' => 39.9], ['grams' => 50, 'price' => 12.5]]);
+
+        $html = $this->get(route('admin.flavors.edit', $flavor))->assertOk()->getContent();
+
+        $this->assertMatchesRegularExpression('/name="prices\[0\]\[grams\]"[^>]*value="50"/', $html);
+        $this->assertMatchesRegularExpression('/name="prices\[0\]\[price\]"[^>]*value="12,50"/', $html);
+        $this->assertMatchesRegularExpression('/name="prices\[1\]\[grams\]"[^>]*value="200"/', $html);
+        $this->assertMatchesRegularExpression('/name="prices\[1\]\[price\]"[^>]*value="39,90"/', $html);
+        $this->assertMatchesRegularExpression('/name="prices\[2\]\[grams\]"[^>]*value=""/', $html);
+    }
+
+    // Spec 010, RF3: tras un error, el formulario conserva lo escrito en los precios y muestra el mensaje.
+    public function test_a_rejected_form_keeps_the_written_prices(): void
+    {
+        $flavor = Flavor::factory()->create();
+
+        $html = $this->from(route('admin.flavors.edit', $flavor))
+            ->followingRedirects()
+            ->put(route('admin.flavors.update', $flavor), $this->payload(['prices' => [['grams' => '50', 'price' => 'doce']]]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression('/name="prices\[0\]\[grams\]"[^>]*value="50"/', $html);
+        $this->assertMatchesRegularExpression('/name="prices\[0\]\[price\]"[^>]*value="doce"/', $html);
+        $this->assertStringContainsString('El precio debe ser un importe entre 0,01 y 9999,99 € con como mucho 2 decimales.', $html);
+    }
+
+    // Spec 010, RF1: al borrar un sabor se borran sus precios.
+    public function test_deleting_a_flavor_deletes_its_prices(): void
+    {
+        $flavor = Flavor::factory()->create();
+        $flavor->prices()->create(['grams' => 50, 'price' => 10]);
+
+        $this->delete(route('admin.flavors.destroy', $flavor))->assertRedirect();
+
+        $this->assertSame(0, DB::table('flavor_prices')->count());
+    }
+
+    // Spec 010, RF1: la base de datos impide dos precios con la misma cantidad en un sabor.
+    public function test_the_database_rejects_two_prices_with_the_same_grams(): void
+    {
+        $flavor = Flavor::factory()->create();
+        $flavor->prices()->create(['grams' => 50, 'price' => 10]);
+
+        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+
+        $flavor->prices()->create(['grams' => 50, 'price' => 12]);
+    }
 }

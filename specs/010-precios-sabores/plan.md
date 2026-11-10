@@ -1,0 +1,32 @@
+# Plan breve — 010: Precios de los sabores por cantidad (modo ligero) — Estado: aprobado (2026-11-10)
+
+- **Cambio**: (3) hoy los sabores no tienen precio. Se añade una tabla de precios: cada sabor puede tener varios formatos (cantidad en gramos) con su precio. El admin los gestiona en el formulario del sabor; el catálogo muestra "desde X €" en la tarjeta y todos los formatos en la ventana de detalle. Sin ordenar ni filtrar por precio.
+- **Archivos**:
+  - NUEVOS: `database/migrations/2026_11_10_000001_create_flavor_prices_table.php`, `app/Models/FlavorPrice.php`, `resources/views/admin/flavors/_prices.blade.php` (filas de precios, compartidas por crear y editar).
+  - Cambian: `app/Models/Flavor.php` (relación `prices`), `app/Http/Requests/StoreFlavorRequest.php`, `app/Http/Controllers/Admin/FlavorController.php` (`create`, `store`, `edit`, `update`), `resources/views/admin/flavors/create.blade.php` y `edit.blade.php`, `app/Http/Controllers/FlavorController.php` y `app/Http/Controllers/FavoriteController.php` (cargar `prices`), `resources/views/index.blade.php` (tarjeta), `resources/views/flavors/_detail-modal.blade.php` (ventana), `tests/Feature/AdminFlavorTest.php`, `tests/Feature/CatalogTest.php`.
+  - Sin dependencias.
+- **RF1** (tabla): `flavor_prices` con `id`, `flavor_id` (clave foránea a `flavors`, `cascadeOnDelete`: al borrar el sabor se borran sus precios), `grams` (entero, la cantidad) y `price` (decimal 8,2, en euros), `timestamps`, y único (`flavor_id`, `grams`): un solo precio por cantidad. Los sabores que ya existen quedan sin precios.
+- **RF2** (admin): al crear y editar un sabor, una sección "Precios" con filas "Cantidad (g)" + "Precio (€)", "+ Añadir precio" y quitar fila (sin JS se envían las filas que haya, más una vacía). Al guardar, los precios del sabor pasan a ser exactamente los de las filas (se reemplazan en la misma transacción que el sabor). Una fila completamente vacía se ignora; quitar todas deja el sabor sin precios.
+- **RF3** (validación, mensajes en español): cantidad entera entre 1 y 5000; precio entre 0,01 y 9999,99 con como mucho 2 decimales, escrito con coma o con punto ("12,50" o "12.50"); fila con cantidad y sin precio (o al revés): error; misma cantidad repetida en un sabor: "No puedes repetir la misma cantidad."; como mucho 10 filas. Los valores raros (arrays, texto) dan error de validación, nunca 500, y si hay error no se guarda nada (ni el sabor ni sus precios) y el formulario conserva lo escrito.
+- **RF4** (tarjeta del catálogo): si el sabor tiene precios, una línea "desde 12,50 €" con el más bajo. Sin precios, no se muestra nada.
+- **RF5** (ventana de detalle, en Inicio y Favoritos): sección "Precios" con cada formato de menor a mayor cantidad, "50 g · 12,50 €". Sin precios, la sección no aparece.
+- **RF6** (formato): precios en formato español, con coma decimal, punto de miles y " €" ("1.234,50 €"); cantidades con " g".
+- **RF7**: a 375 px, la tarjeta, la ventana y la sección de precios del admin se ven bien sin scroll horizontal; consola sin errores.
+- **Fuera de alcance**: ordenar o filtrar por precio; tiendas o enlaces de compra; historial de precios; precio en Favoritos (tarjeta), Marcas o mezclas; importar precios en bloque.
+- **Decisiones**:
+  - Tabla aparte (decisión del usuario) en lugar de columnas fijas: admite cualquier cantidad (50, 70, 200 g…).
+  - `grams` entero (decisión del usuario): se ordenan los formatos y no hay variantes escritas distinto.
+  - Reemplazar todos los precios al guardar (borrar e insertar en una transacción) en lugar de comparar fila a fila: es más simple y, con pocas filas por sabor, no tiene coste.
+  - Coma o punto: se normaliza la coma a punto antes de validar (`prepareForValidation`), solo si el valor es texto.
+  - "desde" se calcula en PHP con los precios cargados (`with('prices')`), sin consulta extra por tarjeta.
+  - Favoritos también carga `prices`, porque usa la misma ventana de detalle (sin cargarlos, haría una consulta por sabor).
+  - Checklist de Postgres y migraciones: tabla nueva (no toca datos existentes); `decimal(8,2)` y único estándar; `down()` borra la tabla; sin SQL de MySQL. Al subirla, `migrate --force` la crea en producción. Probar `migrate:rollback --step=1` en local.
+- **Tests existentes que cambian**: ninguno previsto. Las peticiones de los tests actuales de crear y editar sabor no envían `prices`: crear queda sin precios y editar deja el sabor sin precios (era el comportamiento esperado: se guarda lo que llega).
+- [x] **T1**, RF1, RF2 y RF3 (servidor):
+  - Primero, los tests en rojo en `AdminFlavorTest`: crear y editar guardan los precios de las filas (con coma y con punto); editar reemplaza los anteriores; filas vacías ignoradas; quitar todas deja sin precios; cada error de validación con su mensaje y sin guardar nada (tampoco el sabor); cantidad repetida; más de 10 filas; arrays y texto sin 500; borrar el sabor borra sus precios; el único impide dos precios con la misma cantidad en la base de datos.
+  - Después, la migración, `FlavorPrice`, la relación, `StoreFlavorRequest` y el controlador del admin.
+  - Hecho cuando: `php artisan test` está en verde y la migración se aplica, se deshace y se vuelve a aplicar en local.
+- [x] **T2**, RF2 (vista del admin), RF4, RF5, RF6 y RF7:
+  - Primero, los tests en rojo: el formulario de crear y editar muestra las filas con sus valores (también tras un error); la tarjeta muestra "desde" con el más bajo y nada sin precios; la ventana lista los formatos ordenados con el formato español; Favoritos muestra los precios en la ventana.
+  - Después, `_prices.blade.php`, las vistas del admin, `index.blade.php`, `_detail-modal.blade.php` y la carga de `prices` en los controladores públicos.
+  - Hecho cuando: los tests están en verde y, a 375 px, se añaden y quitan filas de precio en el admin, y la tarjeta y la ventana los muestran sin scroll horizontal ni errores en consola.
