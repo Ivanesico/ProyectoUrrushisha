@@ -131,7 +131,7 @@
             <input type="hidden" name="{{ $filter }}" value="{{ $value }}">
             @endif
             @endforeach
-            <label for="sort" class="form-label filter-label mb-1">Ordenar por</label>
+            <label for="sort" class="form-label filter-label mb-1">Ordenar por:</label>
             <div class="d-flex gap-2">
                 <div class="flex-grow-1">
                     <select name="sort" id="sort" class="form-select form-control-modern" onchange="this.form.submit()" data-filter-dropdown>
@@ -412,6 +412,55 @@
     .sort-form {
         width: 15rem;
         max-width: 100%;
+    }
+
+    /* Con JS (ya existe el dropdown): "Ordenar por: <opción> ▾" en línea y sin caja. Sin JS se queda el <select> nativo. */
+    .sort-form:has(.filter-dropdown) {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        column-gap: 0.4rem;
+        width: auto;
+    }
+
+    .sort-form:has(.filter-dropdown) .form-label {
+        margin-bottom: 0 !important;
+        white-space: nowrap;
+    }
+
+    .sort-form .filter-dropdown-toggle.form-select,
+    .sort-form .filter-dropdown-toggle.form-select:hover,
+    .sort-form .filter-dropdown-toggle.form-select:focus,
+    .sort-form .filter-dropdown-toggle.form-select.show {
+        display: inline-flex;
+        align-items: center;
+        width: auto;
+        max-width: 100%;
+        min-height: 0;
+        padding: 0 1.15rem 0 0;
+        border: 0;
+        border-radius: 4px;
+        background-color: transparent;
+        background-image: var(--bs-form-select-bg-img);
+        background-repeat: no-repeat;
+        background-position: right center;
+        background-size: 14px 10px;
+        box-shadow: none;
+        color: #f472b6;
+        font-size: 0.92rem;
+        font-weight: 700;
+        line-height: 1.5;
+        cursor: pointer;
+    }
+
+    .sort-form .filter-dropdown-toggle.form-select:focus-visible {
+        outline: 2px solid #f472b6;
+        outline-offset: 2px;
+    }
+
+    /* El botón ya no ocupa 15rem: la lista mantiene un ancho para que las opciones no se partan. */
+    .sort-form .filter-dropdown-menu {
+        min-width: 14rem;
     }
 
     /* Mismo estilo que los títulos de grupo de Favoritos. */
@@ -719,7 +768,8 @@
             align-items: start;
         }
 
-        .sort-form {
+        .sort-form,
+        .sort-form:has(.filter-dropdown) {
             width: 100%;
         }
 

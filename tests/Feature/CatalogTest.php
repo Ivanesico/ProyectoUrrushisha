@@ -290,7 +290,7 @@ class CatalogTest extends TestCase
 
         $this->assertStringContainsString('action="'.route('home').'"', $form);
         $this->assertStringContainsString('method="GET"', $form);
-        $this->assertMatchesRegularExpression('/<label for="sort"[^>]*>\s*Ordenar por\s*<\/label>/', $form);
+        $this->assertMatchesRegularExpression('/<label for="sort"[^>]*>\s*Ordenar por:\s*<\/label>/', $form);
         $this->assertMatchesRegularExpression('/<select name="sort" id="sort"[^>]*onchange="this\.form\.submit\(\)"[^>]*data-filter-dropdown/', $form);
         $this->assertSame(1, substr_count($content, 'id="sort"'));
 
