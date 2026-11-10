@@ -46,14 +46,15 @@ class FavoriteController extends Controller {
         ]);
     }
 
-    public function store(Flavor $flavor) {
+    // Con una petición JSON (el corazón con fetch) responde sin redirigir, para no mover la página.
+    public function store(Request $request, Flavor $flavor) {
         $existing = Favorite::where('user_id', Auth::id())
                 ->where('flavor_id', $flavor->id);
 
         if ($existing->exists()) {
             $existing->delete();
 
-            return back()->with('success', 'Sabor eliminado de favoritos.');
+            return $this->toggled($request, false, 'Sabor eliminado de favoritos.');
         }
 
         Favorite::create([
@@ -61,7 +62,15 @@ class FavoriteController extends Controller {
             'flavor_id' => $flavor->id,
         ]);
 
-        return back()->with('success', 'Sabor añadido a favoritos.');
+        return $this->toggled($request, true, 'Sabor añadido a favoritos.');
+    }
+
+    private function toggled(Request $request, bool $favorited, string $message) {
+        if ($request->expectsJson()) {
+            return response()->json(['favorited' => $favorited, 'message' => $message]);
+        }
+
+        return back()->with('success', $message);
     }
 
     private function matchesFilters(Flavor $flavor, Request $request): bool {

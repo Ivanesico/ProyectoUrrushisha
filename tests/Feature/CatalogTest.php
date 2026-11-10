@@ -220,6 +220,17 @@ class CatalogTest extends TestCase
         $response->assertSee('<option value="'.$category->id.'" selected>', false);
     }
 
+    // Spec 003, RF2: los desplegables de filtros se construyen desde los <select>, que siguen siendo el campo enviado.
+    public function test_the_brand_and_category_filters_use_the_filter_dropdown(): void
+    {
+        $content = $this->catalog()->getContent();
+
+        $this->assertMatchesRegularExpression('/<select name="brand_id" id="brand_id"[^>]*data-filter-dropdown/', $content);
+        $this->assertMatchesRegularExpression('/<select name="category_id" id="category_id"[^>]*data-filter-dropdown/', $content);
+        $this->assertMatchesRegularExpression('/<input\s+type="text"\s+name="tobacco_type"/', $content);
+        $this->assertSame(1, substr_count($content, 'function initFilterDropdowns'));
+    }
+
     /**
      * @return array<string, array{string, string}>
      */
@@ -490,15 +501,74 @@ class CatalogTest extends TestCase
         $response->assertDontSee(' selected>', false);
     }
 
-    // RF-61
+    // RF-61 (desde la spec 003, el enlace está en la ventana de cada sabor: hace falta uno)
     public function test_the_catalog_create_mix_link_goes_to_the_creation_form(): void
     {
+        Flavor::factory()->create();
+
         $this->assertCreateMixLink($this->catalog());
     }
 
     public function test_the_favorites_create_mix_link_goes_to_the_creation_form(): void
     {
+        $flavor = Flavor::factory()->create();
+        Favorite::create(['user_id' => auth()->id(), 'flavor_id' => $flavor->id]);
+
         $this->assertCreateMixLink($this->get(route('favorites.index'))->assertOk());
+    }
+
+    // Spec 003, RF3 y RF4: cada sabor del catálogo abre su ventana con el diseño de la tarjeta del catálogo.
+    public function test_each_flavor_of_the_catalog_has_its_detail_modal(): void
+    {
+        $flavor = Flavor::factory()->create([
+            'name' => 'Menta Glacial',
+            'description' => str_repeat('Frescor intenso de menta. ', 8).'Final de la descripción.',
+            'ingredients_text' => 'Menta, hielo, lima y un toque de eucalipto para el final',
+            'tobacco_type' => 'sin_nicotina',
+        ]);
+        $other = Flavor::factory()->create(['name' => 'Otro sabor']);
+
+        $content = $this->catalog()->getContent();
+
+        $modal = $this->detailModal($content, $flavor);
+        $this->assertStringContainsString('Menta Glacial', $modal);
+        $this->assertStringContainsString('Final de la descripción.', $modal);
+        $this->assertStringContainsString('un toque de eucalipto para el final', $modal);
+        $this->assertStringContainsString('Sin nicotina', $modal);
+        $this->assertStringContainsString($flavor->brand->name, $modal);
+        $this->assertStringContainsString($flavor->category->name, $modal);
+        $this->assertStringContainsString('data-bs-dismiss="modal"', $modal);
+        $this->detailModal($content, $other);
+
+        // La tarjeta abre su ventana con clic o Intro; el corazón no la abre.
+        $this->assertMatchesRegularExpression('/tabindex="0"[^>]*onclick="openFlavorModal\('.$flavor->id.'\)"[^>]*onkeydown="if \(event\.key === \'Enter\'/', $content);
+        $this->assertMatchesRegularExpression('/action="'.preg_quote(route('favorites.store', $flavor), '/').'"[^>]*onclick="event\.stopPropagation\(\);"/', $content);
+
+        // Una sola copia del código y ninguna de la ventana antigua.
+        $this->assertSame(1, substr_count($content, 'function openFlavorModal'));
+        $this->assertStringNotContainsString('flavorModalOverlay', $content);
+    }
+
+    public function test_a_flavor_without_description_or_ingredients_shows_default_texts_in_its_modal(): void
+    {
+        $flavor = Flavor::factory()->create(['category_id' => null]);
+
+        $modal = $this->detailModal($this->catalog()->getContent(), $flavor);
+
+        $this->assertStringContainsString('Sin descripción disponible.', $modal);
+        $this->assertStringContainsString('Sin ingredientes definidos', $modal);
+        $this->assertStringContainsString('Rubio', $modal);
+    }
+
+    private function detailModal(string $content, Flavor $flavor): string
+    {
+        $start = strpos($content, 'id="flavorModal-'.$flavor->id.'"');
+        $this->assertNotFalse($start, "Falta la ventana del sabor {$flavor->id}");
+        $this->assertSame(1, substr_count($content, 'id="flavorModal-'.$flavor->id.'"'));
+
+        $end = strpos($content, 'class="modal fade', $start);
+
+        return $end === false ? substr($content, $start) : substr($content, $start, $end - $start);
     }
 
     private function assertCreateMixLink(TestResponse $response): void

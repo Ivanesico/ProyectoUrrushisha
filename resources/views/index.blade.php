@@ -55,7 +55,7 @@
 
                 <div class="col-md-6 col-xl-3">
                     <label for="brand_id" class="form-label filter-label">Marca</label>
-                    <select name="brand_id" id="brand_id" class="form-select form-control-modern">
+                    <select name="brand_id" id="brand_id" class="form-select form-control-modern" data-filter-dropdown>
                         <option value="">Todas las marcas</option>
                         @foreach($brands as $brand)
                         <option value="{{ $brand->id }}" {{ $filters['brand_id'] === (string) $brand->id ? 'selected' : '' }}>
@@ -67,7 +67,7 @@
 
                 <div class="col-md-6 col-xl-2">
                     <label for="category_id" class="form-label filter-label">Categoría</label>
-                    <select name="category_id" id="category_id" class="form-select form-control-modern">
+                    <select name="category_id" id="category_id" class="form-select form-control-modern" data-filter-dropdown>
                         <option value="">Todas</option>
                         @foreach($categories as $category)
                         <option value="{{ $category->id }}" {{ $filters['category_id'] === (string) $category->id ? 'selected' : '' }}>
@@ -110,6 +110,7 @@
                     </a>
                 </div>
             </form>
+            @include('partials._filter-dropdown')
         </div>
     </section>
 
@@ -126,20 +127,17 @@
         @forelse($flavors as $flavor)
         <div class="col-6 col-md-4 col-lg-3">
             <div class="card flavor-card border-0 h-100 position-relative"
+                 role="button"
+                 tabindex="0"
+                 aria-label="Ver detalles de {{ $flavor->name }}"
                  onclick="openFlavorModal({{ $flavor->id }})"
-                 data-id="{{ $flavor->id }}"
-                 data-name="{{ $flavor->name }}"
-                 data-brand="{{ $flavor->brand->name ?? 'Sin marca' }}"
-                 data-category="{{ $flavor->category->name ?? 'Sin categoría' }}"
-                 data-type="{{ $flavor->tobacco_type ?? 'No definido' }}"
-                 data-description="{{ $flavor->description ?? 'Sin descripción disponible.' }}"
-                 data-ingredients="{{ $flavor->ingredients_text ?? 'Sin ingredientes definidos' }}"                 
-                 data-image="{{ $flavor->image_url ? asset('storage/' . $flavor->image_url) : '' }}"
-                 >
+                 onkeydown="if (event.key === 'Enter' && event.target === this) openFlavorModal({{ $flavor->id }})">
                 <div class="card-top-actions">
-                    <form action="{{ route('favorites.store', $flavor) }}" method="POST" onclick="event.stopPropagation();">
+                    {{-- El corazón no abre la ventana --}}
+                    @php($isFavorite = in_array($flavor->id, $favoriteIds))
+                    <form action="{{ route('favorites.store', $flavor) }}" method="POST" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();" data-favorite-toggle data-flavor-id="{{ $flavor->id }}" data-flavor-name="{{ $flavor->name }}">
                         @csrf
-                        <button type="submit" class="favorite-btn {{ in_array($flavor->id, $favoriteIds) ? 'active' : '' }}" title="Favorito">
+                        <button type="submit" class="favorite-btn {{ $isFavorite ? 'active' : '' }}" title="{{ $isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos' }}" aria-label="{{ $isFavorite ? "Quitar {$flavor->name} de favoritos" : "Añadir {$flavor->name} a favoritos" }}" aria-pressed="{{ $isFavorite ? 'true' : 'false' }}">
                             ♥
                         </button>
                     </form>
@@ -162,7 +160,7 @@
                 </div>
 
                 <div class="card-body d-flex flex-column p-3">
-                    <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                         <h5 class="card-title fw-bold mb-0">{{ $flavor->name }}</h5>
 
                         @if($flavor->category)
@@ -210,62 +208,13 @@
         </div>
         @endforelse
     </div>
-    <div id="flavorModalOverlay" class="flavor-modal-overlay" onclick="closeFlavorModal()">
-        <div class="flavor-modal-card" onclick="event.stopPropagation()">
-            <button class="flavor-modal-close" type="button" onclick="closeFlavorModal()">×</button>
 
-            <div class="row g-0">
-                <div class="col-lg-5">
-                    <div class="flavor-modal-image-wrapper">
-                        <img id="modalFlavorImage" src="" alt="" class="flavor-modal-image d-none">
-                        <div id="modalFlavorPlaceholder" class="flavor-modal-placeholder d-flex align-items-center justify-content-center">
-                            <span id="modalFlavorPlaceholderText" class="placeholder-text">?</span>
-                        </div>
-                    </div>
-                </div>
+    {{-- Una ventana por sabor, fuera de las tarjetas para que sus clics no lleguen a ellas --}}
+    @foreach($flavors as $flavor)
+    @include('flavors._detail-modal', ['flavor' => $flavor])
+    @endforeach
+    @include('partials._favorite-toggle')
 
-                <div class="col-lg-7">
-                    <div class="p-4 p-lg-5">
-                        <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
-                            <h2 id="modalFlavorName" class="modal-flavor-title mb-0"></h2>
-                            <span id="modalFlavorCategory" class="badge badge-soft"></span>
-                        </div>
-
-                        <div class="modal-meta-list mb-4">
-                            <div class="modal-meta-item">
-                                <span class="modal-meta-label">Marca</span>
-                                <span id="modalFlavorBrand" class="modal-meta-value"></span>
-                            </div>
-
-                            <div class="modal-meta-item">
-                                <span class="modal-meta-label">Tipo</span>
-                                <span id="modalFlavorType" class="modal-meta-value"></span>
-                            </div>
-                        </div>
-
-                        <div class="mb-4">
-                            <h6 class="modal-section-title">Descripción</h6>
-                            <p id="modalFlavorDescription" class="modal-description mb-0"></p>
-                        </div>
-
-                        <div class="mb-4">
-                            <h6 class="modal-section-title">Ingredientes</h6>
-                            <div id="modalFlavorIngredients" class="ingredients-chip"></div>
-                        </div>
-
-                        <div class="d-flex flex-wrap gap-2">
-                            <a href="{{ route('mixes.create') }}" class="btn btn-dark rounded-pill px-4">
-                                Crear mezcla
-                            </a>
-                            <button type="button" class="btn btn-outline-secondary rounded-pill px-4" onclick="closeFlavorModal()">
-                                Cerrar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
     @if($flavors->hasPages())
     <div class="d-flex justify-content-center mt-5">
         <div class="pagination-wrapper">
@@ -360,6 +309,9 @@
     }
 
     .filters-panel {
+        /* backdrop-filter crea un contexto de apilamiento: así la lista abierta queda por encima de las tarjetas. */
+        position: relative;
+        z-index: 30;
         background: rgba(255,255,255,0.07);
         border: 1px solid rgba(255,255,255,0.09);
         border-radius: 24px;
@@ -471,8 +423,12 @@
         object-fit: cover;
     }
 
-    .flavor-placeholder,
-    .flavor-modal-placeholder {
+    .flavor-card:focus-visible {
+        outline: 3px solid #f472b6;
+        outline-offset: 2px;
+    }
+
+    .flavor-placeholder {
         width: 100%;
         height: 100%;
         background: linear-gradient(135deg, #8b5cf6, #ec4899);
@@ -503,18 +459,23 @@
         font-weight: 700;
         padding: 0.48rem 0.75rem;
         white-space: normal;
-        overflow-wrap: anywhere;
+        overflow-wrap: normal;
+        text-align: left;
         min-width: 0;
     }
 
-    .meta-list,
-    .modal-meta-list {
+    /* Si la categoría no cabe junto al nombre, pasa entera a la línea siguiente. */
+    .flavor-card .badge-soft {
+        flex-shrink: 0;
+        max-width: 100%;
+    }
+
+    .meta-list {
         display: grid;
         gap: 0.8rem;
     }
 
-    .meta-item,
-    .modal-meta-item {
+    .meta-item {
         display: flex;
         justify-content: space-between;
         gap: 1rem;
@@ -523,15 +484,13 @@
         border-bottom: 1px solid #f3f4f6;
     }
 
-    .meta-label,
-    .modal-meta-label {
+    .meta-label {
         color: #6b7280;
         font-size: 0.85rem;
         font-weight: 600;
     }
 
-    .meta-value,
-    .modal-meta-value {
+    .meta-value {
         color: #374151;
         font-size: 0.9rem;
         font-weight: 700;
@@ -572,80 +531,6 @@
         color: rgba(255,255,255,0.68);
         max-width: 620px;
         margin: 0 auto;
-    }
-
-    .flavor-modal-overlay {
-        position: fixed;
-        inset: 0;
-        background: rgba(15, 17, 23, 0.72);
-        backdrop-filter: blur(8px);
-        z-index: 2000;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        padding: 24px;
-    }
-
-    .flavor-modal-overlay.show {
-        display: flex;
-    }
-
-    .flavor-modal-card {
-        position: relative;
-        width: min(100%, 1100px);
-        max-height: 90vh;
-        overflow-y: auto;
-        border-radius: 28px;
-        background: rgba(255,255,255,0.99);
-        box-shadow: 0 30px 80px rgba(0,0,0,0.35);
-    }
-
-    .flavor-modal-close {
-        position: absolute;
-        top: 18px;
-        right: 18px;
-        z-index: 10;
-        width: 46px;
-        height: 46px;
-        border: none;
-        border-radius: 50%;
-        background: rgba(255,255,255,0.96);
-        color: #111827;
-        font-size: 1.8rem;
-        line-height: 1;
-        box-shadow: 0 8px 18px rgba(0,0,0,0.16);
-    }
-
-    .flavor-modal-image-wrapper {
-        height: 100%;
-        min-height: 320px;
-        background: linear-gradient(135deg, #eef2ff, #f5f3ff);
-        border-top-left-radius: 28px;
-        border-bottom-left-radius: 28px;
-        overflow: hidden;
-    }
-
-    .flavor-modal-image {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    .modal-flavor-title {
-        color: #111827;
-        font-weight: 800;
-        font-size: clamp(1.6rem, 3vw, 2.4rem);
-    }
-
-    .modal-section-title {
-        color: #374151;
-        font-weight: 700;
-        margin-bottom: 0.6rem;
-    }
-
-    .modal-description {
-        color: #1f2937;
-        line-height: 1.7;
     }
 
     .pagination-wrapper {
@@ -742,14 +627,6 @@
     @media (prefers-reduced-motion: reduce) {
         .us-page {
             transition: none;
-        }
-    }
-
-    @media (max-width: 991px) {
-        .flavor-modal-image-wrapper {
-            min-height: 240px;
-            border-bottom-left-radius: 0;
-            border-top-right-radius: 28px;
         }
     }
 
@@ -853,51 +730,6 @@
         .placeholder-text {
             font-size: 2.4rem;
         }
-
-        .flavor-modal-overlay {
-            padding: 12px;
-        }
-
-        .flavor-modal-card {
-            border-radius: 22px;
-            max-height: 92vh;
-        }
-
-        .flavor-modal-image-wrapper {
-            min-height: 220px;
-            border-top-left-radius: 22px;
-            border-top-right-radius: 22px;
-        }
-
-        .flavor-modal-close {
-            width: 38px;
-            height: 38px;
-            top: 12px;
-            right: 12px;
-            font-size: 1.4rem;
-        }
-
-        .modal-flavor-title {
-            font-size: 1.35rem;
-        }
-
-        .modal-meta-label,
-        .modal-meta-value,
-        .modal-description,
-        .modal-section-title {
-            font-size: 0.92rem;
-        }
-
-        #modalFlavorIngredients.ingredients-chip {
-            display: block;
-            width: 100%;
-            max-width: 100%;
-            white-space: normal;
-            overflow: visible;
-            text-overflow: unset;
-            line-height: 1.5;
-            border-radius: 16px;
-        }
     }
 
     @media (min-width: 768px) {
@@ -916,45 +748,5 @@
     const filters = document.getElementById('filtersContent');
     filters.classList.toggle('show');
     }
-
-    function openFlavorModal(id) {
-    const card = document.querySelector(`.flavor-card[data-id="${id}"]`);
-    if (!card) return;
-    document.getElementById('modalFlavorName').textContent = card.dataset.name || '';
-    document.getElementById('modalFlavorBrand').textContent = card.dataset.brand || '';
-    document.getElementById('modalFlavorCategory').textContent = card.dataset.category || '';
-    document.getElementById('modalFlavorType').textContent = card.dataset.type || '';
-    document.getElementById('modalFlavorDescription').textContent = card.dataset.description || '';
-    document.getElementById('modalFlavorIngredients').textContent = card.dataset.ingredients || '';
-    const image = card.dataset.image || '';
-    const imageEl = document.getElementById('modalFlavorImage');
-    const placeholderEl = document.getElementById('modalFlavorPlaceholder');
-    const placeholderTextEl = document.getElementById('modalFlavorPlaceholderText');
-    if (image) {
-    imageEl.src = image;
-    imageEl.alt = card.dataset.name || '';
-    imageEl.classList.remove('d-none');
-    placeholderEl.classList.add('d-none');
-    } else {
-    imageEl.classList.add('d-none');
-    placeholderEl.classList.remove('d-none');
-    placeholderTextEl.textContent = (card.dataset.name || '?').charAt(0).toUpperCase();
-    }
-
-    document.getElementById('flavorModalOverlay').classList.add('show');
-    document.body.style.overflow = 'hidden';
-    }
-
-    function closeFlavorModal() {
-    document.getElementById('flavorModalOverlay').classList.remove('show');
-    document.body.style.overflow = '';
-    }
-
-    document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-    closeFlavorModal();
-    }
-    });
-
 </script>
 @endpush

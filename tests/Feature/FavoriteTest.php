@@ -69,6 +69,80 @@ class FavoriteTest extends TestCase
         $this->assertSame(0, Favorite::count());
     }
 
+    // Spec 003, RF7: con una petición JSON, el corazón cambia el favorito sin redirigir.
+    public function test_a_json_request_adds_the_favorite_and_responds_json(): void
+    {
+        $user = User::factory()->create();
+        $flavor = Flavor::factory()->create();
+
+        $this->actingAs($user)
+            ->postJson(route('favorites.store', $flavor))
+            ->assertOk()
+            ->assertExactJson(['favorited' => true, 'message' => 'Sabor añadido a favoritos.']);
+
+        $this->assertTrue($this->favoriteExists($user, $flavor));
+    }
+
+    public function test_a_json_request_removes_the_favorite_and_responds_json(): void
+    {
+        $user = User::factory()->create();
+        $flavor = Flavor::factory()->create();
+        Favorite::create(['user_id' => $user->id, 'flavor_id' => $flavor->id]);
+
+        $this->actingAs($user)
+            ->postJson(route('favorites.store', $flavor))
+            ->assertOk()
+            ->assertExactJson(['favorited' => false, 'message' => 'Sabor eliminado de favoritos.']);
+
+        $this->assertFalse($this->favoriteExists($user, $flavor));
+        $this->assertModelExists($flavor);
+    }
+
+    public function test_a_json_request_without_session_responds_401(): void
+    {
+        $flavor = Flavor::factory()->create();
+
+        $this->postJson(route('favorites.store', $flavor))->assertUnauthorized();
+        $this->assertSame(0, Favorite::count());
+    }
+
+    public function test_a_json_request_only_changes_the_favorites_of_the_user(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $flavor = Flavor::factory()->create();
+        Favorite::create(['user_id' => $other->id, 'flavor_id' => $flavor->id]);
+
+        // El otro usuario lo tiene, pero para este usuario se añade (no se quita el ajeno).
+        $this->actingAs($user)
+            ->postJson(route('favorites.store', $flavor))
+            ->assertOk()
+            ->assertJson(['favorited' => true]);
+
+        $this->assertTrue($this->favoriteExists($user, $flavor));
+        $this->assertTrue($this->favoriteExists($other, $flavor));
+
+        $this->postJson(route('favorites.store', $flavor))->assertJson(['favorited' => false]);
+
+        $this->assertFalse($this->favoriteExists($user, $flavor));
+        $this->assertTrue($this->favoriteExists($other, $flavor));
+    }
+
+    public function test_the_heart_uses_the_favorite_toggle_in_both_pages(): void
+    {
+        $user = User::factory()->create();
+        $flavor = Flavor::factory()->create();
+        Favorite::create(['user_id' => $user->id, 'flavor_id' => $flavor->id]);
+
+        foreach ([route('home'), route('favorites.index')] as $url) {
+            $content = $this->actingAs($user)->get($url)->assertOk()->getContent();
+
+            $this->assertMatchesRegularExpression('/<form[^>]*action="'.preg_quote(route('favorites.store', $flavor), '/').'"[^>]*data-favorite-toggle/', $content);
+            $this->assertSame(1, substr_count($content, 'function initFavoriteToggles'));
+            $this->assertSame(1, substr_count($content, 'id="favoriteToasts"'));
+        }
+    }
+
     // RF-17
     public function test_it_only_lists_the_favorites_of_the_user(): void
     {
@@ -256,6 +330,23 @@ class FavoriteTest extends TestCase
         $response->assertSee('value="x"', false);
     }
 
+    // Spec 003, RF2: los cuatro desplegables usan el dropdown y se siguen enviando al elegir.
+    public function test_the_filters_use_the_filter_dropdown_and_submit_on_change(): void
+    {
+        $user = User::factory()->create();
+        $this->favoriteFor($user, ['name' => 'Menta']);
+
+        $content = $this->actingAs($user)->get(route('favorites.index'))->assertOk()->getContent();
+
+        foreach (['brand_id', 'category_id', 'tobacco_type', 'sort'] as $field) {
+            $this->assertMatchesRegularExpression(
+                '/<select name="'.$field.'" id="'.$field.'"[^>]*onchange="this\.form\.submit\(\)"[^>]*data-filter-dropdown/',
+                $content,
+            );
+        }
+        $this->assertSame(1, substr_count($content, 'function initFilterDropdowns'));
+    }
+
     /**
      * @return array<string, array{array<string, mixed>}>
      */
@@ -311,6 +402,48 @@ class FavoriteTest extends TestCase
         $this->actingAs($user)->from($filtered)
             ->post(route('favorites.store', $flavor))
             ->assertRedirect($filtered);
+    }
+
+    // Spec 003, RF3 y RF4: cada favorito abre la misma ventana que el catálogo, en todos los grupos.
+    public function test_each_favorite_has_its_detail_modal(): void
+    {
+        $user = User::factory()->create();
+        $mint = $this->favoriteFor($user, [
+            'name' => 'Menta Glacial',
+            'description' => str_repeat('Frescor intenso de menta. ', 8).'Final de la descripción.',
+            'ingredients_text' => 'Menta, hielo, lima y un toque de eucalipto para el final',
+            'tobacco_type' => 'sin_nicotina',
+        ]);
+        $grape = $this->favoriteFor($user, ['name' => 'Uva', 'tobacco_type' => 'negro']);
+
+        $content = $this->actingAs($user)
+            ->get(route('favorites.index', ['sort' => 'type']))
+            ->assertOk()
+            ->getContent();
+
+        $modal = $this->detailModal($content, $mint);
+        $this->assertStringContainsString('Final de la descripción.', $modal);
+        $this->assertStringContainsString('un toque de eucalipto para el final', $modal);
+        $this->assertStringContainsString('Sin nicotina', $modal);
+        $this->assertStringContainsString($mint->brand->name, $modal);
+        $this->assertStringContainsString('href="'.route('mixes.create').'"', $modal);
+        $this->assertStringContainsString('Negro', $this->detailModal($content, $grape));
+
+        $this->assertMatchesRegularExpression('/onclick="openFlavorModal\('.$mint->id.'\)"/', $content);
+        $this->assertMatchesRegularExpression('/action="'.preg_quote(route('favorites.store', $mint), '/').'"[^>]*onclick="event\.stopPropagation\(\);"/', $content);
+        $this->assertSame(1, substr_count($content, 'function openFlavorModal'));
+        $this->assertStringNotContainsString('flavorModalOverlay', $content);
+    }
+
+    private function detailModal(string $content, Flavor $flavor): string
+    {
+        $start = strpos($content, 'id="flavorModal-'.$flavor->id.'"');
+        $this->assertNotFalse($start, "Falta la ventana del sabor {$flavor->id}");
+        $this->assertSame(1, substr_count($content, 'id="flavorModal-'.$flavor->id.'"'));
+
+        $end = strpos($content, 'class="modal fade', $start);
+
+        return $end === false ? substr($content, $start) : substr($content, $start, $end - $start);
     }
 
     // RF-19
