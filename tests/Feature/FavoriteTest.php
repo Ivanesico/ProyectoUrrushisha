@@ -220,7 +220,7 @@ class FavoriteTest extends TestCase
         $category = Category::factory()->create();
         $this->favoriteFor($user, ['name' => 'De la marca', 'brand_id' => $brand->id]);
         $this->favoriteFor($user, ['name' => 'De la categoria', 'category_id' => $category->id]);
-        $this->favoriteFor($user, ['name' => 'Del tipo', 'tobacco_type' => 'base']);
+        $this->favoriteFor($user, ['name' => 'Del tipo', 'tobacco_type_id' => $this->tobaccoType('base')]);
 
         $this->actingAs($user);
 
@@ -228,7 +228,7 @@ class FavoriteTest extends TestCase
             ->assertSee('De la marca')->assertDontSee('De la categoria')->assertDontSee('Del tipo');
         $this->get(route('favorites.index', ['category_id' => $category->id]))
             ->assertSee('De la categoria')->assertDontSee('De la marca')->assertDontSee('Del tipo');
-        $this->get(route('favorites.index', ['tobacco_type' => 'base']))
+        $this->get(route('favorites.index', ['tobacco_type_id' => $this->tobaccoType('base')]))
             ->assertSee('Del tipo')->assertDontSee('De la marca')->assertDontSee('De la categoria');
     }
 
@@ -236,11 +236,11 @@ class FavoriteTest extends TestCase
     {
         $user = User::factory()->create();
         $brand = Brand::factory()->create();
-        $this->favoriteFor($user, ['name' => 'Cumple', 'brand_id' => $brand->id, 'tobacco_type' => 'rojo']);
-        $this->favoriteFor($user, ['name' => 'Otro tipo', 'brand_id' => $brand->id, 'tobacco_type' => 'negro']);
-        $this->favoriteFor($user, ['name' => 'Otra marca', 'tobacco_type' => 'rojo']);
+        $this->favoriteFor($user, ['name' => 'Cumple', 'brand_id' => $brand->id, 'tobacco_type_id' => $this->tobaccoType('rojo')]);
+        $this->favoriteFor($user, ['name' => 'Otro tipo', 'brand_id' => $brand->id, 'tobacco_type_id' => $this->tobaccoType('negro')]);
+        $this->favoriteFor($user, ['name' => 'Otra marca', 'tobacco_type_id' => $this->tobaccoType('rojo')]);
 
-        $this->actingAs($user)->get(route('favorites.index', ['brand_id' => $brand->id, 'tobacco_type' => 'rojo']))
+        $this->actingAs($user)->get(route('favorites.index', ['brand_id' => $brand->id, 'tobacco_type_id' => $this->tobaccoType('rojo')]))
             ->assertSee('Cumple')
             ->assertDontSee('Otro tipo')
             ->assertDontSee('Otra marca')
@@ -285,9 +285,9 @@ class FavoriteTest extends TestCase
         $category = Category::factory()->create(['name' => 'Frutal']);
         $other = Category::factory()->create(['name' => 'Dulce']);
 
-        $this->favoriteFor($user, ['name' => 'Menta', 'brand_id' => $first->id, 'category_id' => $other->id, 'tobacco_type' => null], '2026-01-01 10:00:00');
-        $this->favoriteFor($user, ['name' => 'Ámbar', 'brand_id' => $last->id, 'category_id' => null, 'tobacco_type' => 'rubio'], '2026-01-02 10:00:00');
-        $this->favoriteFor($user, ['name' => 'Coco', 'brand_id' => $first->id, 'category_id' => $category->id, 'tobacco_type' => 'negro'], '2026-01-03 10:00:00');
+        $this->favoriteFor($user, ['name' => 'Menta', 'brand_id' => $first->id, 'category_id' => $other->id, 'tobacco_type_id' => null], '2026-01-01 10:00:00');
+        $this->favoriteFor($user, ['name' => 'Ámbar', 'brand_id' => $last->id, 'category_id' => null, 'tobacco_type_id' => $this->tobaccoType('rubio')], '2026-01-02 10:00:00');
+        $this->favoriteFor($user, ['name' => 'Coco', 'brand_id' => $first->id, 'category_id' => $category->id, 'tobacco_type_id' => $this->tobaccoType('negro')], '2026-01-03 10:00:00');
 
         $response = $this->actingAs($user)->get(route('favorites.index', ['sort' => $sort]))->assertOk();
 
@@ -299,7 +299,7 @@ class FavoriteTest extends TestCase
     {
         $user = User::factory()->create();
         $brand = Brand::factory()->create(['name' => 'Al Fakher']);
-        $this->favoriteFor($user, ['name' => 'Menta', 'brand_id' => $brand->id, 'category_id' => null, 'tobacco_type' => 'sin_nicotina']);
+        $this->favoriteFor($user, ['name' => 'Menta', 'brand_id' => $brand->id, 'category_id' => null, 'tobacco_type_id' => $this->tobaccoType('sin_nicotina')]);
 
         $this->actingAs($user);
 
@@ -314,18 +314,19 @@ class FavoriteTest extends TestCase
         $user = User::factory()->create();
         $mine = Brand::factory()->create(['name' => 'Marca mía']);
         Brand::factory()->create(['name' => 'Marca ajena']);
-        $this->favoriteFor($user, ['brand_id' => $mine->id, 'tobacco_type' => 'base']);
-        Flavor::factory()->create(['tobacco_type' => 'rojo']);
+        $this->favoriteFor($user, ['brand_id' => $mine->id, 'tobacco_type_id' => $this->tobaccoType('base')]);
+        Flavor::factory()->create(['tobacco_type_id' => $this->tobaccoType('rojo')]);
 
         $response = $this->actingAs($user)
-            ->get(route('favorites.index', ['brand_id' => $mine->id, 'tobacco_type' => 'base', 'sort' => 'brand', 'search' => 'x']))
+            ->get(route('favorites.index', ['brand_id' => $mine->id, 'tobacco_type_id' => $this->tobaccoType('base'), 'sort' => 'brand', 'search' => 'x']))
             ->assertOk();
 
         $response->assertSee('Marca mía');
         $response->assertDontSee('Marca ajena');
         $response->assertSee('<option value="'.$mine->id.'" selected>', false);
-        $response->assertSee('<option value="base" selected>', false);
-        $response->assertDontSee('<option value="rojo"', false);
+        // Spec 012: las opciones de tipo son los ids de la tabla, con su nombre.
+        $response->assertSee('<option value="'.$this->tobaccoType('base').'" selected>Base</option>', false);
+        $response->assertDontSee('>Rojo</option>', false);
         $response->assertSee('<option value="brand" selected>', false);
         $response->assertSee('value="x"', false);
     }
@@ -338,7 +339,7 @@ class FavoriteTest extends TestCase
 
         $content = $this->actingAs($user)->get(route('favorites.index'))->assertOk()->getContent();
 
-        foreach (['brand_id', 'category_id', 'tobacco_type', 'sort'] as $field) {
+        foreach (['brand_id', 'category_id', 'tobacco_type_id', 'sort'] as $field) {
             $this->assertMatchesRegularExpression(
                 '/<select name="'.$field.'" id="'.$field.'"[^>]*onchange="this\.form\.submit\(\)"[^>]*data-filter-dropdown/',
                 $content,
@@ -356,8 +357,8 @@ class FavoriteTest extends TestCase
             'marca no numérica' => [['brand_id' => 'abc']],
             'marca como array' => [['brand_id' => ['1']]],
             'categoría negativa' => [['category_id' => '-1']],
-            'tipo fuera de la lista' => [['tobacco_type' => 'virginia']],
-            'tipo como array' => [['tobacco_type' => ['rubio']]],
+            'tipo inexistente' => [['tobacco_type_id' => '999']],
+            'tipo como array' => [['tobacco_type_id' => ['1']]],
             'búsqueda como array' => [['search' => ['Menta']]],
         ];
     }
@@ -366,7 +367,7 @@ class FavoriteTest extends TestCase
     public function test_an_invalid_filter_gives_no_results_without_error(array $query): void
     {
         $user = User::factory()->create();
-        $this->favoriteFor($user, ['name' => 'Menta', 'tobacco_type' => 'rubio']);
+        $this->favoriteFor($user, ['name' => 'Menta', 'tobacco_type_id' => $this->tobaccoType('rubio')]);
 
         $this->actingAs($user)->get(route('favorites.index', $query))
             ->assertOk()
@@ -396,8 +397,8 @@ class FavoriteTest extends TestCase
     public function test_removing_a_favorite_returns_to_the_filtered_list(): void
     {
         $user = User::factory()->create();
-        $flavor = $this->favoriteFor($user, ['tobacco_type' => 'base']);
-        $filtered = route('favorites.index', ['tobacco_type' => 'base']);
+        $flavor = $this->favoriteFor($user, ['tobacco_type_id' => $this->tobaccoType('base')]);
+        $filtered = route('favorites.index', ['tobacco_type_id' => $this->tobaccoType('base')]);
 
         $this->actingAs($user)->from($filtered)
             ->post(route('favorites.store', $flavor))
@@ -412,9 +413,9 @@ class FavoriteTest extends TestCase
             'name' => 'Menta Glacial',
             'description' => str_repeat('Frescor intenso de menta. ', 8).'Final de la descripción.',
             'ingredients_text' => 'Menta, hielo, lima y un toque de eucalipto para el final',
-            'tobacco_type' => 'sin_nicotina',
+            'tobacco_type_id' => $this->tobaccoType('sin_nicotina'),
         ]);
-        $grape = $this->favoriteFor($user, ['name' => 'Uva', 'tobacco_type' => 'negro']);
+        $grape = $this->favoriteFor($user, ['name' => 'Uva', 'tobacco_type_id' => $this->tobaccoType('negro')]);
 
         $content = $this->actingAs($user)
             ->get(route('favorites.index', ['sort' => 'type']))

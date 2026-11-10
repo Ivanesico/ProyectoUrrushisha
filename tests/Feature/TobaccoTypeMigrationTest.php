@@ -67,14 +67,14 @@ class TobaccoTypeMigrationTest extends TestCase
         $this->assertTobaccoTypeRejected('ROJO');
     }
 
-    public function test_the_model_list_matches_the_database_list(): void
+    // Spec 012: la constante Flavor::TOBACCO_TYPES ya no existe (los tipos están en tobacco_types);
+    // se comprueba la lista de add_rojo directamente.
+    public function test_the_add_rojo_list_has_the_six_values(): void
     {
         $this->migrate();
         $this->insertBrandAndCategory();
 
-        $this->assertSame(['rubio', 'negro', 'herbal', 'base', 'rojo', 'sin_nicotina'], Flavor::TOBACCO_TYPES);
-
-        foreach (Flavor::TOBACCO_TYPES as $index => $type) {
+        foreach (['rubio', 'negro', 'herbal', 'base', 'rojo', 'sin_nicotina'] as $index => $type) {
             $this->insertFlavor(100 + $index, $type);
         }
 
@@ -240,9 +240,18 @@ class TobaccoTypeMigrationTest extends TestCase
         throw new AssertionFailedError('The guard accepted a database that is not in-memory SQLite.');
     }
 
+    /**
+     * Solo hasta add_rojo: la spec 012 quita la columna tobacco_type en una migración posterior.
+     */
     private function migrate(): void
     {
-        $this->assertSame(0, Artisan::call('migrate'));
+        $paths = collect(glob(database_path('migrations/*.php')))
+            ->filter(fn ($path) => strcmp(basename($path), self::MIGRATION) <= 0)
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->assertSame(0, Artisan::call('migrate', ['--path' => $paths, '--realpath' => true]));
     }
 
     /**

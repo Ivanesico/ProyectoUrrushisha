@@ -13,6 +13,7 @@ use App\Http\Controllers\FlavorRatingController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\Admin\BrandController as AdminBrandController;
 use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
+use App\Http\Controllers\Admin\TobaccoTypeController as AdminTobaccoTypeController;
 use App\Http\Controllers\Admin\FlavorController as AdminFlavorController;
 
 // Un id que no sea un entero positivo de hasta 18 dígitos responde 404 sin llegar a la base de datos
@@ -20,6 +21,7 @@ Route::pattern('mix', '[1-9][0-9]{0,17}');
 Route::pattern('flavor', '[1-9][0-9]{0,17}');
 Route::pattern('brand', '[1-9][0-9]{0,17}');
 Route::pattern('category', '[1-9][0-9]{0,17}');
+Route::pattern('tobacco_type', '[1-9][0-9]{0,17}');
 
 // Públicas (solo para no logueados)
 Route::middleware('guest')->group(function () {
@@ -67,6 +69,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [AdminController::class, 'index'])->name('index');
         Route::resource('brands', AdminBrandController::class);
         Route::resource('categories', AdminCategoryController::class);
+        // Spec 012: tipos de tabaco (parámetro {tobacco_type})
+        Route::resource('tobacco-types', AdminTobaccoTypeController::class);
         Route::resource('flavors', AdminFlavorController::class);
     });
 });

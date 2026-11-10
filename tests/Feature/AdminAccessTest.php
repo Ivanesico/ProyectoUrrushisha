@@ -23,6 +23,9 @@ class AdminAccessTest extends TestCase
         'admin.categories.edit', 'admin.categories.update', 'admin.categories.destroy',
         'admin.flavors.index', 'admin.flavors.create', 'admin.flavors.store', 'admin.flavors.show',
         'admin.flavors.edit', 'admin.flavors.update', 'admin.flavors.destroy',
+        // Spec 012: sección "Tipos de tabaco"
+        'admin.tobacco-types.index', 'admin.tobacco-types.create', 'admin.tobacco-types.store', 'admin.tobacco-types.show',
+        'admin.tobacco-types.edit', 'admin.tobacco-types.update', 'admin.tobacco-types.destroy',
     ];
 
     private Brand $brand;
@@ -59,6 +62,7 @@ class AdminAccessTest extends TestCase
             'brand' => $this->brand->id,
             'category' => $this->category->id,
             'flavor' => $this->flavor->id,
+            'tobacco_type' => $this->tobaccoType('herbal'),
         ];
 
         $requests = [];
@@ -84,6 +88,7 @@ class AdminAccessTest extends TestCase
             'brands' => DB::table('brands')->orderBy('id')->get()->toArray(),
             'categories' => DB::table('categories')->orderBy('id')->get()->toArray(),
             'flavors' => DB::table('flavors')->orderBy('id')->get()->toArray(),
+            'tobacco_types' => DB::table('tobacco_types')->orderBy('id')->get()->toArray(),
         ];
     }
 
@@ -110,7 +115,8 @@ class AdminAccessTest extends TestCase
 
         $this->assertSame($expected, $names);
         // GET y HEAD en las rutas de lectura; PUT y PATCH en las de actualización
-        $this->assertCount(13 * 2 + 3 * 1 + 3 * 2 + 3 * 1, $this->adminRequests());
+        // Spec 012: cuatro secciones (marcas, categorías, sabores y tipos de tabaco) más el panel.
+        $this->assertCount(17 * 2 + 4 * 1 + 4 * 2 + 4 * 1, $this->adminRequests());
     }
 
     public function test_user_without_admin_permission_gets_403_on_every_route_and_method_without_changes(): void

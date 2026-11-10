@@ -21,7 +21,7 @@ class FlavorController extends Controller {
 
         // prices: "desde" en la tarjeta y la lista de la ventana (spec 010), sin una consulta por sabor.
         // ratings: media y número de valoraciones de la página (spec 011).
-        $query = Flavor::with(['brand', 'category', 'prices'])
+        $query = Flavor::with(['brand', 'category', 'tobaccoType', 'prices'])
                 ->withAvg('ratings', 'stars')
                 ->withCount('ratings')
                 ->where('is_public', true)

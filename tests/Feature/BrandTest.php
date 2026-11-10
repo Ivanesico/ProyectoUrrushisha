@@ -127,7 +127,7 @@ class BrandTest extends TestCase
             'brand_id' => $brand->id,
             'category_id' => $category->id,
             'name' => 'Arándano',
-            'tobacco_type' => 'sin_nicotina',
+            'tobacco_type_id' => $this->tobaccoType('sin_nicotina'),
             'image_url' => 'flavors/arandano.webp',
         ]);
 
@@ -158,7 +158,7 @@ class BrandTest extends TestCase
             'name' => 'Sabor incompleto',
             'brand_id' => $brand->id,
             'category_id' => null,
-            'tobacco_type' => null,
+            'tobacco_type_id' => null,
         ]);
 
         $response = $this->actingAs(User::factory()->create())->get(route('brands.show', $brand));

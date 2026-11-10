@@ -58,16 +58,16 @@
                             </div>
 
                             <div class="col-md-6">
-                                <label for="tobacco_type" class="form-label">Tipo de tabaco</label>
-                                <select name="tobacco_type" id="tobacco_type" class="form-select">
+                                {{-- Spec 012: los tipos de la tabla tobacco_types; tras un error, lo que se eligió (también "Sin especificar") --}}
+                                @php($selectedType = (string) ($errors->any() ? old('tobacco_type_id') : $flavor->tobacco_type_id))
+                                <label for="tobacco_type_id" class="form-label">Tipo de tabaco</label>
+                                <select name="tobacco_type_id" id="tobacco_type_id" class="form-select">
                                     <option value="">Sin especificar</option>
-                                    @foreach(\App\Models\Flavor::TOBACCO_TYPES as $type)
-                                        <option value="{{ $type }}"{{ old('tobacco_type', $flavor->tobacco_type) === $type ? ' selected' : '' }}>
-                                            {{ ucfirst(str_replace('_', ' ', $type)) }}
-                                        </option>
+                                    @foreach($tobaccoTypes as $type)
+                                        <option value="{{ $type->id }}"{{ $selectedType === (string) $type->id ? ' selected' : '' }}>{{ $type->name }}</option>
                                     @endforeach
                                 </select>
-                                @error('tobacco_type')
+                                @error('tobacco_type_id')
                                     <div class="text-danger small mt-1">{{ $message }}</div>
                                 @enderror
                             </div>

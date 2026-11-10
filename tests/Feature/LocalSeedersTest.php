@@ -79,7 +79,7 @@ class LocalSeedersTest extends TestCase
         $this->assertGreaterThan(12, $publicFlavors->count());
         $this->assertTrue($publicFlavors->contains(fn ($flavor) => str_contains((string) $flavor->ingredients_text, 'Arándano')));
         $this->assertTrue($publicFlavors->contains(fn ($flavor) => in_array(mb_substr($flavor->name, 0, 1), ['Á', 'É', 'Í', 'Ó', 'Ú'], true)));
-        $this->assertTrue($publicFlavors->contains('tobacco_type', 'rojo'));
+        $this->assertTrue($publicFlavors->contains('tobacco_type_id', $this->tobaccoType('rojo')));
         $this->assertGreaterThanOrEqual(1, Flavor::where('is_public', false)->count());
 
         $favoriteIds = Favorite::where('user_id', $user->id)->pluck('flavor_id');
@@ -114,7 +114,7 @@ class LocalSeedersTest extends TestCase
         $otherMix = Mix::factory()->create(['user_id' => $otherUser->id]);
         $otherItem = MixItem::create(['mix_id' => $otherMix->id, 'flavor_id' => $otherFlavor->id, 'ratio' => 100]);
 
-        $seededFlavor = Flavor::where('tobacco_type', 'rojo')->firstOrFail();
+        $seededFlavor = Flavor::where('tobacco_type_id', $this->tobaccoType('rojo'))->firstOrFail();
         $originalDescription = $seededFlavor->description;
         $seededFlavor->update(['description' => 'Cambiada a mano']);
 

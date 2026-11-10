@@ -236,7 +236,7 @@
 
                         <div class="meta-item">
                             <span class="meta-label">Tipo</span>
-                            <span class="meta-value">{{ $flavor->tobacco_type ?? 'No definido' }}</span>
+                            <span class="meta-value">{{ $flavor->tobacco_type_label ?? 'No definido' }}</span>
                         </div>
                     </div>
 

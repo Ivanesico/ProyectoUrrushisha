@@ -4,8 +4,8 @@
 
 @section('content')
 @php
-    $activeFilters = collect([$filters['brand_id'], $filters['category_id'], $filters['tobacco_type']])->filter(fn ($value) => $value !== '')->count();
-    $isFiltering = collect(['search', 'brand_id', 'category_id', 'tobacco_type'])->contains(fn ($filter) => request()->filled($filter));
+    $activeFilters = collect([$filters['brand_id'], $filters['category_id'], $filters['tobacco_type_id']])->filter(fn ($value) => $value !== '')->count();
+    $isFiltering = collect(['search', 'brand_id', 'category_id', 'tobacco_type_id'])->contains(fn ($filter) => request()->filled($filter));
     $showAdvanced = $activeFilters > 0 || $sort !== 'name_asc';
 @endphp
 <div class="container py-4">
@@ -73,11 +73,11 @@
                 </div>
 
                 <div>
-                    <label for="tobacco_type" class="form-label">Tipo</label>
-                    <select name="tobacco_type" id="tobacco_type" class="form-select" onchange="this.form.submit()" data-filter-dropdown>
+                    <label for="tobacco_type_id" class="form-label">Tipo</label>
+                    <select name="tobacco_type_id" id="tobacco_type_id" class="form-select" onchange="this.form.submit()" data-filter-dropdown>
                         <option value="">Todos</option>
-                        @foreach($tobaccoTypes as $type => $label)
-                        <option value="{{ $type }}"{{ $filters['tobacco_type'] === $type ? ' selected' : '' }}>{{ $label }}</option>
+                        @foreach($tobaccoTypes as $type)
+                        <option value="{{ $type->id }}"{{ $filters['tobacco_type_id'] === (string) $type->id ? ' selected' : '' }}>{{ $type->name }}</option>
                         @endforeach
                     </select>
                 </div>

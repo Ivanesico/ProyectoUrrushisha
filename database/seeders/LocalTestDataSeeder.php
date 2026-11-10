@@ -8,6 +8,7 @@ use App\Models\Favorite;
 use App\Models\Flavor;
 use App\Models\Mix;
 use App\Models\MixItem;
+use App\Models\TobaccoType;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -95,7 +96,8 @@ class LocalTestDataSeeder extends Seeder
             [
                 'category_id' => $category->id,
                 'description' => "{$name}: sabor de prueba.",
-                'tobacco_type' => $tobaccoType,
+                // Spec 012: el tipo por su nombre legible ("sin_nicotina" → "Sin nicotina").
+                'tobacco_type_id' => TobaccoType::firstOrCreate(['name' => ucfirst(str_replace('_', ' ', $tobaccoType))])->id,
                 'ingredients_text' => $ingredients,
                 'is_public' => $isPublic,
             ]

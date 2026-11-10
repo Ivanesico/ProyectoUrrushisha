@@ -150,7 +150,7 @@
                         <td>{{ $flavor->name }}</td>
                         <td>{{ $flavor->brand->name ?? '-' }}</td>
                         <td>{{ $flavor->category->name ?? '-' }}</td>
-                        <td>{{ $flavor->tobacco_type ?? '-' }}</td>
+                        <td>{{ $flavor->tobacco_type_label ?? '-' }}</td>
                         <td>
                             @if($flavor->is_public)
                             <span class="badge text-bg-success">Sí</span>

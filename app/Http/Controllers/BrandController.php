@@ -45,7 +45,7 @@ class BrandController extends Controller {
      */
     public function show(Brand $brand) {
         
-        $flavors = $brand->flavors()->with('category')->where('is_public', true)->orderBy('name')->get();
+        $flavors = $brand->flavors()->with(['category', 'tobaccoType'])->where('is_public', true)->orderBy('name')->get();
         return view('brands.show', compact('brand', 'flavors'));
     }
 

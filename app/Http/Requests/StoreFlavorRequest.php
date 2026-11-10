@@ -2,11 +2,11 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Flavor;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class StoreFlavorRequest extends FormRequest {
+
+    private const TOBACCO_TYPE_MESSAGE = 'El tipo de tabaco seleccionado no existe.';
 
     private const GRAMS_MESSAGE = 'La cantidad debe ser un número entero de gramos entre 1 y 5000.';
 
@@ -62,7 +62,8 @@ class StoreFlavorRequest extends FormRequest {
             'category_id' => 'bail|required|integer|min:1|exists:categories,id',
             'name' => 'required|string|max:180',
             'description' => 'nullable|string',
-            'tobacco_type' => ['nullable', Rule::in(Flavor::TOBACCO_TYPES)],
+            // Spec 012: un tipo de la tabla tobacco_types; bail para no consultar algo que no es un id.
+            'tobacco_type_id' => 'bail|nullable|integer|min:1|exists:tobacco_types,id',
             'ingredients_text' => 'nullable|string|max:500',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'is_public' => 'nullable|boolean',
@@ -83,7 +84,9 @@ class StoreFlavorRequest extends FormRequest {
             'name.string' => 'El nombre del sabor debe ser un texto.',
             'name.max' => 'El nombre del sabor no puede superar 180 caracteres.',
             'description.string' => 'La descripción debe ser un texto.',
-            'tobacco_type.in' => 'El tipo de tabaco debe ser uno de estos valores: ' . implode(', ', Flavor::TOBACCO_TYPES) . '.',
+            'tobacco_type_id.integer' => self::TOBACCO_TYPE_MESSAGE,
+            'tobacco_type_id.min' => self::TOBACCO_TYPE_MESSAGE,
+            'tobacco_type_id.exists' => self::TOBACCO_TYPE_MESSAGE,
             'ingredients_text.string' => 'Los ingredientes deben ser un texto.',
             'ingredients_text.max' => 'Los ingredientes no pueden superar 500 caracteres.',
             'image.image' => 'El archivo debe ser una imagen.',

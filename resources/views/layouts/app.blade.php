@@ -311,6 +311,7 @@
                 ['route' => 'admin.flavors.index', 'active' => 'admin.flavors.*', 'label' => 'Sabores'],
                 ['route' => 'admin.brands.index', 'active' => 'admin.brands.*', 'label' => 'Marcas'],
                 ['route' => 'admin.categories.index', 'active' => 'admin.categories.*', 'label' => 'Categorías'],
+                ['route' => 'admin.tobacco-types.index', 'active' => 'admin.tobacco-types.*', 'label' => 'Tipos de tabaco'],
             ];
         @endphp
 
@@ -377,6 +378,16 @@
                         </a>
                         @endforeach
                     </nav>
+                    {{-- En el móvil la fila no cabe: se desplaza sola hasta la sección activa (solo en horizontal) --}}
+                    <script>
+                        (function () {
+                            const nav = document.currentScript.previousElementSibling;
+                            const active = nav.querySelector('.is-active');
+                            if (active && nav.scrollWidth > nav.clientWidth) {
+                                nav.scrollLeft = active.offsetLeft + active.offsetWidth - nav.clientWidth;
+                            }
+                        })();
+                    </script>
                 </div>
             </div>
             @endif

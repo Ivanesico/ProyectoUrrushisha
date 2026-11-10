@@ -23,7 +23,7 @@ class AdminFlavorTest extends TestCase
     // PNG real de 1x1: GD está desactivado y no se puede usar UploadedFile::fake()->image()
     private const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
-    private const TOBACCO_TYPE_MESSAGE = 'El tipo de tabaco debe ser uno de estos valores: rubio, negro, herbal, base, rojo, sin_nicotina.';
+    private const TOBACCO_TYPE_MESSAGE = 'El tipo de tabaco seleccionado no existe.';
 
     private const ERROR_A_REASON = 'Error conocido A (excepción expresa de la spec 001): un array en un campo de texto provoca un error de servidor al volver al formulario.';
 
@@ -81,7 +81,7 @@ class AdminFlavorTest extends TestCase
             'category_id' => $this->category->id,
             'name' => 'Menta fresca',
             'description' => 'Muy refrescante',
-            'tobacco_type' => 'rubio',
+            'tobacco_type_id' => $this->tobaccoType('rubio'),
             'ingredients_text' => 'Menta, hielo',
             'is_public' => '1',
         ], $overrides);
@@ -128,7 +128,7 @@ class AdminFlavorTest extends TestCase
             'category_id' => $this->category->id,
             'name' => 'Menta fresca',
             'description' => 'Muy refrescante',
-            'tobacco_type' => 'rubio',
+            'tobacco_type_id' => $this->tobaccoType('rubio'),
             'ingredients_text' => 'Menta, hielo',
             'image_url' => null,
             'created_by' => $this->admin->id,
@@ -154,7 +154,7 @@ class AdminFlavorTest extends TestCase
         $response = $this->followingRedirects()->put(route('admin.flavors.update', $flavor), $this->payload([
             'brand_id' => $otherBrand->id,
             'name' => 'Renovado',
-            'tobacco_type' => 'negro',
+            'tobacco_type_id' => $this->tobaccoType('negro'),
         ]));
 
         $response->assertOk()->assertSee('Sabor actualizado correctamente.')->assertDontSee('Sabor creado');
@@ -162,7 +162,7 @@ class AdminFlavorTest extends TestCase
         $flavor->refresh();
         $this->assertSame('Renovado', $flavor->name);
         $this->assertSame($otherBrand->id, $flavor->brand_id);
-        $this->assertSame('negro', $flavor->tobacco_type);
+        $this->assertSame($this->tobaccoType('negro'), $flavor->tobacco_type_id);
     }
 
     public function test_admin_deletes_an_unused_flavor_and_its_favorites_but_not_its_image_file(): void
@@ -273,9 +273,9 @@ class AdminFlavorTest extends TestCase
 
     public function test_the_tobacco_type_filter_is_a_partial_text_search(): void
     {
-        Flavor::factory()->create(['name' => 'Negro', 'tobacco_type' => 'negro']);
-        Flavor::factory()->create(['name' => 'Sin nicotina', 'tobacco_type' => 'sin_nicotina']);
-        Flavor::factory()->create(['name' => 'Rubio', 'tobacco_type' => 'rubio']);
+        Flavor::factory()->create(['name' => 'Negro', 'tobacco_type_id' => $this->tobaccoType('negro')]);
+        Flavor::factory()->create(['name' => 'Sin nicotina', 'tobacco_type_id' => $this->tobaccoType('sin_nicotina')]);
+        Flavor::factory()->create(['name' => 'Rubio', 'tobacco_type_id' => $this->tobaccoType('rubio')]);
 
         $this->assertSame(['Negro'], $this->adminNames(['tobacco_type' => 'NEG']));
         $this->assertSame(['Sin nicotina'], $this->adminNames(['tobacco_type' => 'nicotina']));
@@ -307,12 +307,12 @@ class AdminFlavorTest extends TestCase
     public function test_the_filters_are_combined(): void
     {
         $brand = Brand::factory()->create();
-        Flavor::factory()->notPublic()->create(['name' => 'Menta oculta', 'brand_id' => $brand->id, 'tobacco_type' => 'negro']);
-        Flavor::factory()->create(['name' => 'Menta visible', 'brand_id' => $brand->id, 'tobacco_type' => 'negro']);
-        Flavor::factory()->notPublic()->create(['name' => 'Menta rubia', 'brand_id' => $brand->id, 'tobacco_type' => 'rubio']);
-        Flavor::factory()->notPublic()->create(['name' => 'Menta de otra marca', 'tobacco_type' => 'negro']);
-        Flavor::factory()->notPublic()->create(['name' => 'Coco oculto', 'brand_id' => $brand->id, 'tobacco_type' => 'negro']);
-        Flavor::factory()->notPublic()->create(['name' => 'Menta con foto', 'brand_id' => $brand->id, 'tobacco_type' => 'negro', 'image_url' => 'flavors/x.png']);
+        Flavor::factory()->notPublic()->create(['name' => 'Menta oculta', 'brand_id' => $brand->id, 'tobacco_type_id' => $this->tobaccoType('negro')]);
+        Flavor::factory()->create(['name' => 'Menta visible', 'brand_id' => $brand->id, 'tobacco_type_id' => $this->tobaccoType('negro')]);
+        Flavor::factory()->notPublic()->create(['name' => 'Menta rubia', 'brand_id' => $brand->id, 'tobacco_type_id' => $this->tobaccoType('rubio')]);
+        Flavor::factory()->notPublic()->create(['name' => 'Menta de otra marca', 'tobacco_type_id' => $this->tobaccoType('negro')]);
+        Flavor::factory()->notPublic()->create(['name' => 'Coco oculto', 'brand_id' => $brand->id, 'tobacco_type_id' => $this->tobaccoType('negro')]);
+        Flavor::factory()->notPublic()->create(['name' => 'Menta con foto', 'brand_id' => $brand->id, 'tobacco_type_id' => $this->tobaccoType('negro'), 'image_url' => 'flavors/x.png']);
 
         $this->assertSame(['Menta oculta'], $this->adminNames([
             'name' => 'menta',
@@ -545,6 +545,18 @@ class AdminFlavorTest extends TestCase
     // RF-45
 
     /**
+     * Spec 012: solo el desplegable del tipo de tabaco (marca y categoría también tienen opciones marcadas).
+     */
+    private function tobaccoSelect(string $html): string
+    {
+        $this->assertSame(1, preg_match('#<select name="tobacco_type_id".*?</select>#s', $html, $match));
+
+        return $match[0];
+    }
+
+    /**
+     * Spec 012: los 6 tipos que crea la migración (valor antiguo).
+     *
      * @return array<string, array{0: string}>
      */
     public static function allowedTobaccoTypes(): array
@@ -559,67 +571,93 @@ class AdminFlavorTest extends TestCase
         ];
     }
 
+    // Spec 012, RF3: cualquier tipo de la tabla se acepta al crear y al editar.
     #[DataProvider('allowedTobaccoTypes')]
     public function test_every_tobacco_type_in_the_list_is_accepted(string $type): void
     {
-        $flavor = Flavor::factory()->create(['tobacco_type' => null]);
+        $flavor = Flavor::factory()->create(['tobacco_type_id' => null]);
+        $id = $this->tobaccoType($type);
 
-        $this->post(route('admin.flavors.store'), $this->payload(['tobacco_type' => $type]))->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('flavors', ['name' => 'Menta fresca', 'tobacco_type' => $type]);
+        $this->post(route('admin.flavors.store'), $this->payload(['tobacco_type_id' => $id]))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('flavors', ['name' => 'Menta fresca', 'tobacco_type_id' => $id]);
 
-        $this->put(route('admin.flavors.update', $flavor), $this->payload(['name' => 'Otro', 'tobacco_type' => $type]))
+        $this->put(route('admin.flavors.update', $flavor), $this->payload(['name' => 'Otro', 'tobacco_type_id' => $id]))
             ->assertSessionHasNoErrors();
-        $this->assertSame($type, $flavor->fresh()->tobacco_type);
+        $this->assertSame($id, $flavor->fresh()->tobacco_type_id);
     }
 
+    // Spec 012, RF3: un tipo creado desde el admin también se ofrece y se acepta.
+    public function test_a_new_tobacco_type_is_offered_and_accepted(): void
+    {
+        $new = \App\Models\TobaccoType::create(['name' => 'Virginia']);
+
+        $this->get(route('admin.flavors.create'))->assertSee('<option value="'.$new->id.'">Virginia</option>', false);
+        $this->post(route('admin.flavors.store'), $this->payload(['tobacco_type_id' => $new->id]))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('flavors', ['name' => 'Menta fresca', 'tobacco_type_id' => $new->id]);
+    }
+
+    // Spec 012, RF3: desplegable con los tipos de la tabla por nombre y "Sin especificar".
     public function test_the_forms_offer_the_tobacco_types_as_a_dropdown(): void
     {
-        $flavor = Flavor::factory()->create(['tobacco_type' => null]);
+        $flavor = Flavor::factory()->create(['tobacco_type_id' => null]);
 
         foreach ([route('admin.flavors.create'), route('admin.flavors.edit', $flavor)] as $url) {
             $response = $this->get($url)
                 ->assertOk()
-                ->assertSee('<select name="tobacco_type"', false)
-                ->assertDontSee('<input type="text" name="tobacco_type"', false)
+                ->assertSee('<select name="tobacco_type_id"', false)
+                ->assertDontSee('name="tobacco_type"', false)
                 ->assertSee('<option value="">Sin especificar</option>', false);
 
-            foreach (Flavor::TOBACCO_TYPES as $type) {
-                $response->assertSee('<option value="'.$type.'"', false)
-                    ->assertDontSee('<option value="'.$type.'" selected>', false);
+            $select = $this->tobaccoSelect($response->getContent());
+
+            foreach (self::allowedTobaccoTypes() as [$type]) {
+                $this->assertStringContainsString('<option value="'.$this->tobaccoType($type).'">'.ucfirst(str_replace('_', ' ', $type)).'</option>', $select);
             }
+
+            $this->assertStringNotContainsString(' selected>', $select);
+            $this->assertMatchesRegularExpression('#>Base<.*>Herbal<.*>Negro<.*>Rojo<.*>Rubio<.*>Sin nicotina<#s', $select);
         }
     }
 
     public function test_the_edit_form_selects_the_saved_tobacco_type(): void
     {
-        $flavor = Flavor::factory()->create(['tobacco_type' => 'base']);
+        $flavor = Flavor::factory()->create(['tobacco_type_id' => $this->tobaccoType('base')]);
 
         $this->get(route('admin.flavors.edit', $flavor))
-            ->assertSee('<option value="base" selected>', false)
-            ->assertDontSee('<option value="rubio" selected>', false);
+            ->assertSee('<option value="'.$this->tobaccoType('base').'" selected>Base</option>', false)
+            ->assertDontSee('<option value="'.$this->tobaccoType('rubio').'" selected>', false);
     }
 
     public function test_a_rejected_form_keeps_the_chosen_tobacco_type(): void
     {
-        $flavor = Flavor::factory()->create(['tobacco_type' => 'rubio']);
+        $flavor = Flavor::factory()->create(['tobacco_type_id' => $this->tobaccoType('rubio')]);
 
-        $this->from(route('admin.flavors.edit', $flavor))
+        $select = $this->tobaccoSelect($this->from(route('admin.flavors.edit', $flavor))
             ->followingRedirects()
-            ->put(route('admin.flavors.update', $flavor), $this->payload(['name' => '', 'tobacco_type' => 'rojo']))
-            ->assertSee('<option value="rojo" selected>', false)
-            ->assertDontSee('<option value="rubio" selected>', false);
+            ->put(route('admin.flavors.update', $flavor), $this->payload(['name' => '', 'tobacco_type_id' => $this->tobaccoType('rojo')]))
+            ->getContent());
+        $this->assertStringContainsString('<option value="'.$this->tobaccoType('rojo').'" selected>Rojo</option>', $select);
+        $this->assertSame(1, substr_count($select, ' selected>'));
 
-        $this->from(route('admin.flavors.create'))
+        // Elegir "Sin especificar" y fallar no vuelve a marcar el tipo guardado.
+        $select = $this->tobaccoSelect($this->from(route('admin.flavors.edit', $flavor))
             ->followingRedirects()
-            ->post(route('admin.flavors.store'), $this->payload(['name' => '', 'tobacco_type' => 'base']))
-            ->assertSee('<option value="base" selected>', false);
+            ->put(route('admin.flavors.update', $flavor), $this->payload(['name' => '', 'tobacco_type_id' => '']))
+            ->getContent());
+        $this->assertStringNotContainsString(' selected>', $select);
+
+        $select = $this->tobaccoSelect($this->from(route('admin.flavors.create'))
+            ->followingRedirects()
+            ->post(route('admin.flavors.store'), $this->payload(['name' => '', 'tobacco_type_id' => $this->tobaccoType('base')]))
+            ->getContent());
+        $this->assertStringContainsString('<option value="'.$this->tobaccoType('base').'" selected>Base</option>', $select);
     }
 
     public function test_an_empty_tobacco_type_is_accepted(): void
     {
-        $this->post(route('admin.flavors.store'), $this->payload(['tobacco_type' => '']))->assertSessionHasNoErrors();
+        $this->post(route('admin.flavors.store'), $this->payload(['tobacco_type_id' => '']))->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('flavors', ['name' => 'Menta fresca', 'tobacco_type' => null]);
+        $this->assertDatabaseHas('flavors', ['name' => 'Menta fresca', 'tobacco_type_id' => null]);
     }
 
     /**
@@ -628,37 +666,38 @@ class AdminFlavorTest extends TestCase
     public static function invalidTobaccoTypes(): array
     {
         return [
-            'fuera de la lista' => ['Virginia'],
-            'con mayúsculas' => ['Rubio'],
-            'como array' => [['rubio']],
+            'id inexistente' => ['999999'],
+            'texto' => ['rubio'],
+            'id cero' => ['0'],
+            'decimal' => ['1.5'],
+            'desbordado' => ['99999999999999999999'],
+            'como array' => [['1']],
         ];
     }
 
+    // Spec 012, RF3: un tipo que no está en la tabla se rechaza con su mensaje y sin guardar nada.
     #[DataProvider('invalidTobaccoTypes')]
-    public function test_a_tobacco_type_outside_the_list_is_rejected_with_the_allowed_values(mixed $type): void
+    public function test_a_tobacco_type_outside_the_list_is_rejected(mixed $type): void
     {
-        $flavor = Flavor::factory()->create(['tobacco_type' => 'negro']);
+        $flavor = Flavor::factory()->create(['tobacco_type_id' => $this->tobaccoType('negro')]);
 
-        $this->post(route('admin.flavors.store'), $this->payload(['tobacco_type' => $type]))
-            ->assertSessionHasErrors(['tobacco_type' => self::TOBACCO_TYPE_MESSAGE]);
+        $this->post(route('admin.flavors.store'), $this->payload(['tobacco_type_id' => $type]))
+            ->assertSessionHasErrors(['tobacco_type_id' => self::TOBACCO_TYPE_MESSAGE]);
         $this->assertDatabaseMissing('flavors', ['name' => 'Menta fresca']);
 
-        $this->put(route('admin.flavors.update', $flavor), $this->payload(['tobacco_type' => $type]))
-            ->assertSessionHasErrors(['tobacco_type' => self::TOBACCO_TYPE_MESSAGE]);
-        $this->assertSame('negro', $flavor->fresh()->tobacco_type);
+        $this->put(route('admin.flavors.update', $flavor), $this->payload(['tobacco_type_id' => $type]))
+            ->assertSessionHasErrors(['tobacco_type_id' => self::TOBACCO_TYPE_MESSAGE]);
+        $this->assertSame($this->tobaccoType('negro'), $flavor->fresh()->tobacco_type_id);
     }
 
     public function test_the_tobacco_type_error_is_shown_on_the_form(): void
     {
         $response = $this->followingRedirects()
             ->from(route('admin.flavors.create'))
-            ->post(route('admin.flavors.store'), $this->payload(['tobacco_type' => 'Virginia']));
+            ->post(route('admin.flavors.store'), $this->payload(['tobacco_type_id' => '999999']));
 
-        $response->assertOk()->assertSee(self::TOBACCO_TYPE_MESSAGE)->assertDontSee('value="Virginia"', false);
-
-        foreach (Flavor::TOBACCO_TYPES as $type) {
-            $response->assertDontSee('<option value="'.$type.'" selected>', false);
-        }
+        $response->assertOk()->assertSee(self::TOBACCO_TYPE_MESSAGE);
+        $this->assertStringNotContainsString(' selected>', $this->tobaccoSelect($response->getContent()));
     }
 
     public function test_an_array_as_tobacco_type_does_not_break_the_forms(): void
@@ -669,13 +708,13 @@ class AdminFlavorTest extends TestCase
 
         $this->followingRedirects()
             ->from(route('admin.flavors.create'))
-            ->post(route('admin.flavors.store'), $this->payload(['tobacco_type' => ['rubio']]))
+            ->post(route('admin.flavors.store'), $this->payload(['tobacco_type_id' => ['1']]))
             ->assertOk()
             ->assertSee(self::TOBACCO_TYPE_MESSAGE);
 
         $this->followingRedirects()
             ->from(route('admin.flavors.edit', $flavor))
-            ->put(route('admin.flavors.update', $flavor), $this->payload(['tobacco_type' => ['rubio']]))
+            ->put(route('admin.flavors.update', $flavor), $this->payload(['tobacco_type_id' => ['1']]))
             ->assertOk()
             ->assertSee(self::TOBACCO_TYPE_MESSAGE);
     }
@@ -1104,7 +1143,7 @@ class AdminFlavorTest extends TestCase
 
         $flavor->refresh();
         $this->assertSame('Renovado', $flavor->name);
-        $this->assertSame('rubio', $flavor->tobacco_type);
+        $this->assertSame($this->tobaccoType('rubio'), $flavor->tobacco_type_id);
         $this->assertSame($this->brand->id, $flavor->brand_id);
         $this->assertFalse($flavor->is_public);
     }

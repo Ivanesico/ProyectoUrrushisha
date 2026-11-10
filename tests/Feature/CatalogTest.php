@@ -96,11 +96,11 @@ class CatalogTest extends TestCase
         foreach (range(1, 13) as $number) {
             Flavor::factory()->create([
                 'name' => sprintf('Menta %02d', $number),
-                'tobacco_type' => 'negro',
+                'tobacco_type_id' => $this->tobaccoType('negro'),
                 'created_at' => now()->subMinutes($number),
             ]);
         }
-        Flavor::factory()->create(['name' => 'Coco', 'tobacco_type' => 'rubio']);
+        Flavor::factory()->create(['name' => 'Coco', 'tobacco_type_id' => $this->tobaccoType('rubio')]);
 
         $firstPage = $this->catalog(['name' => 'menta', 'tobacco_type' => 'negro']);
         $firstPage->assertSee('?name=menta&tobacco_type=negro&page=2');
@@ -413,7 +413,7 @@ class CatalogTest extends TestCase
     public function test_the_pagination_links_go_to_the_catalogo_anchor_keeping_the_sort_and_the_filters(): void
     {
         foreach (range(1, 25) as $number) {
-            Flavor::factory()->create(['name' => sprintf('Menta %02d', $number), 'tobacco_type' => 'negro']);
+            Flavor::factory()->create(['name' => sprintf('Menta %02d', $number), 'tobacco_type_id' => $this->tobaccoType('negro')]);
         }
 
         $secondPage = $this->catalog(['name' => 'menta', 'tobacco_type' => 'negro', 'sort' => 'name_desc', 'page' => 2]);
@@ -540,12 +540,12 @@ class CatalogTest extends TestCase
         Flavor::factory()->create([
             'name' => 'Blue Mist',
             'ingredients_text' => 'Menta y limón',
-            'tobacco_type' => 'sin_nicotina',
+            'tobacco_type_id' => $this->tobaccoType('sin_nicotina'),
         ]);
         Flavor::factory()->create([
             'name' => 'Coco',
             'ingredients_text' => 'Coco',
-            'tobacco_type' => 'rubio',
+            'tobacco_type_id' => $this->tobaccoType('rubio'),
         ]);
 
         $this->assertSame(['Blue Mist'], $this->names($this->catalog(['name' => 'ue mi'])));
@@ -561,7 +561,7 @@ class CatalogTest extends TestCase
             'brand_id' => $brand->id,
             'category_id' => $category->id,
             'ingredients_text' => 'Menta',
-            'tobacco_type' => 'negro',
+            'tobacco_type_id' => $this->tobaccoType('negro'),
         ];
 
         Flavor::factory()->create(['name' => 'Cumple todo'] + $matching);
@@ -569,7 +569,7 @@ class CatalogTest extends TestCase
         Flavor::factory()->create(array_merge($matching, ['name' => 'Cumple marca distinta', 'brand_id' => Brand::factory()->create()->id]));
         Flavor::factory()->create(array_merge($matching, ['name' => 'Cumple categoría distinta', 'category_id' => Category::factory()->create()->id]));
         Flavor::factory()->create(array_merge($matching, ['name' => 'Cumple ingrediente distinto', 'ingredients_text' => 'Coco']));
-        Flavor::factory()->create(array_merge($matching, ['name' => 'Cumple tipo distinto', 'tobacco_type' => 'rubio']));
+        Flavor::factory()->create(array_merge($matching, ['name' => 'Cumple tipo distinto', 'tobacco_type_id' => $this->tobaccoType('rubio')]));
 
         $response = $this->catalog([
             'brand_id' => $brand->id,
@@ -698,16 +698,16 @@ class CatalogTest extends TestCase
             'acento' => ['herbal', 'hérbal'],
             'mayúscula acentuada' => ['herbal', 'HÉRBAL'],
             'rojo con acento' => ['rojo', 'RÓJO'],
-            'ñ en minúscula' => ['sin_nicotina', 'sin_ñicotina'],
-            'Ñ en mayúscula' => ['sin_nicotina', 'SIN_ÑICOTINA'],
+            'ñ en minúscula' => ['sin_nicotina', 'sin ñicotina'],
+            'Ñ en mayúscula' => ['sin_nicotina', 'SIN ÑICOTINA'],
         ];
     }
 
     #[DataProvider('accentInsensitiveTypeSearches')]
     public function test_the_tobacco_type_filter_ignores_case_and_accents(string $stored, string $search): void
     {
-        Flavor::factory()->create(['name' => 'Con el tipo', 'tobacco_type' => $stored]);
-        Flavor::factory()->create(['name' => 'Otro', 'tobacco_type' => 'rubio']);
+        Flavor::factory()->create(['name' => 'Con el tipo', 'tobacco_type_id' => $this->tobaccoType($stored)]);
+        Flavor::factory()->create(['name' => 'Otro', 'tobacco_type_id' => $this->tobaccoType('rubio')]);
 
         $this->assertSame(['Con el tipo'], $this->names($this->catalog(['tobacco_type' => $search])));
     }
@@ -936,7 +936,7 @@ class CatalogTest extends TestCase
             'name' => 'Menta Glacial',
             'description' => str_repeat('Frescor intenso de menta. ', 8).'Final de la descripción.',
             'ingredients_text' => 'Menta, hielo, lima y un toque de eucalipto para el final',
-            'tobacco_type' => 'sin_nicotina',
+            'tobacco_type_id' => $this->tobaccoType('sin_nicotina'),
         ]);
         $other = Flavor::factory()->create(['name' => 'Otro sabor']);
 

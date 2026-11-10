@@ -8,6 +8,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Flavor;
 use App\Models\FlavorPrice;
+use App\Models\TobaccoType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -55,7 +56,7 @@ class FlavorController extends Controller {
             $sort = 'recent';
         }
 
-        $flavors = Flavor::with(['brand', 'category'])
+        $flavors = Flavor::with(['brand', 'category', 'tobaccoType'])
                 ->filteredBy($request->only(self::FILTERS))
                 ->sortedBy($sort)
                 ->paginate(50)
@@ -87,8 +88,9 @@ class FlavorController extends Controller {
     public function create() {
         $brands = Brand::orderBy('name')->get();
         $categories = Category::orderBy('name')->get();
+        $tobaccoTypes = TobaccoType::orderBy('name')->get();
 
-        return view('admin.flavors.create', compact('brands', 'categories'));
+        return view('admin.flavors.create', compact('brands', 'categories', 'tobaccoTypes'));
     }
 
     public function store(StoreFlavorRequest $request) {
@@ -105,7 +107,7 @@ class FlavorController extends Controller {
                 'category_id' => $request->category_id,
                 'name' => $request->name,
                 'description' => $request->description,
-                'tobacco_type' => $request->tobacco_type,
+                'tobacco_type_id' => $request->tobacco_type_id,
                 'ingredients_text' => $request->ingredients_text,
                 'image_url' => $imagePath,
                 'created_by' => auth()->id(),
@@ -128,10 +130,11 @@ class FlavorController extends Controller {
     public function edit(Request $request, Flavor $flavor) {
         $brands = Brand::orderBy('name')->get();
         $categories = Category::orderBy('name')->get();
+        $tobaccoTypes = TobaccoType::orderBy('name')->get();
         // Tras un error de validación se vuelve a esta misma URL, así que los parámetros se conservan.
         $listParams = self::listParams($request->query());
 
-        return view('admin.flavors.edit', compact('flavor', 'brands', 'categories', 'listParams'));
+        return view('admin.flavors.edit', compact('flavor', 'brands', 'categories', 'tobaccoTypes', 'listParams'));
     }
 
     public function update(StoreFlavorRequest $request, Flavor $flavor) {
@@ -150,7 +153,7 @@ class FlavorController extends Controller {
                 'category_id' => $request->category_id,
                 'name' => $request->name,
                 'description' => $request->description,
-                'tobacco_type' => $request->tobacco_type,
+                'tobacco_type_id' => $request->tobacco_type_id,
                 'ingredients_text' => $request->ingredients_text,
                 'image_url' => $imagePath,
                 'is_public' => $request->boolean('is_public'),

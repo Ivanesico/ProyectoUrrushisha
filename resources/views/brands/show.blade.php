@@ -31,8 +31,8 @@
                 </div>
                 <div class="brand-flavor-body">
                     <h2 class="brand-flavor-name">{{ $flavor->name }}</h2>
-                    @if($flavor->tobacco_type)
-                    <p class="brand-flavor-type">{{ ucfirst(str_replace('_', ' ', $flavor->tobacco_type)) }}</p>
+                    @if($flavor->tobacco_type_label)
+                    <p class="brand-flavor-type">{{ $flavor->tobacco_type_label }}</p>
                     @endif
                     @if($flavor->category)
                     <span class="brand-flavor-category">{{ $flavor->category->name }}</span>

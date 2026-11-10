@@ -11,15 +11,13 @@ class Flavor extends Model {
 
     use HasFactory;
 
-    public const TOBACCO_TYPES = ['rubio', 'negro', 'herbal', 'base', 'rojo', 'sin_nicotina'];
-
     // Letras que el buscador ignora. Se aplica igual a lo que escribe el usuario y a la columna.
     private const SEARCH_REPLACEMENTS = [
         'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
         'Á' => 'a', 'É' => 'e', 'Í' => 'i', 'Ó' => 'o', 'Ú' => 'u', 'Ü' => 'u', 'Ñ' => 'n',
     ];
 
-    private const SEARCHABLE_COLUMNS = ['name', 'ingredients_text', 'tobacco_type'];
+    private const SEARCHABLE_COLUMNS = ['name', 'ingredients_text'];
 
     // Órdenes del catálogo de la portada; el primero es el de por defecto. El admin añade los de ID.
     public const CATALOG_SORTS = [
@@ -39,8 +37,8 @@ class Flavor extends Model {
         'id_desc' => 'ID (mayor primero)',
     ];
 
-    // Filtros de texto: clave del filtro => columna en la que se busca.
-    private const TEXT_FILTERS = ['name' => 'name', 'ingredient' => 'ingredients_text', 'tobacco_type' => 'tobacco_type'];
+    // Filtros de texto: clave del filtro => columna en la que se busca. El tipo de tabaco va aparte (spec 012).
+    private const TEXT_FILTERS = ['name' => 'name', 'ingredient' => 'ingredients_text'];
 
     // Datos incompletos: clave del filtro => columna que está vacía (nula o '').
     private const MISSING_FILTERS = ['image' => 'image_url', 'description' => 'description'];
@@ -53,7 +51,7 @@ class Flavor extends Model {
         'category_id',
         'name',
         'description',
-        'tobacco_type',
+        'tobacco_type_id',
         'ingredients_text',
         'image_url',
         'created_by',
@@ -71,6 +69,11 @@ class Flavor extends Model {
 
     public function category() {
         return $this->belongsTo(Category::class, 'category_id', 'id');
+    }
+
+    // Spec 012: tipo de tabaco, gestionable desde el admin.
+    public function tobaccoType() {
+        return $this->belongsTo(TobaccoType::class, 'tobacco_type_id', 'id');
     }
 
     public function mixItems() {
@@ -95,12 +98,9 @@ class Flavor extends Model {
         return mb_strtoupper(mb_substr($this->name, 0, 1));
     }
 
+    // Spec 012: el nombre del tipo de tabaco (null sin tipo). Cargar tobaccoType con with() en las listas.
     public function getTobaccoTypeLabelAttribute(): ?string {
-        return $this->tobacco_type ? self::tobaccoTypeLabel($this->tobacco_type) : null;
-    }
-
-    public static function tobaccoTypeLabel(string $type): string {
-        return ucfirst(str_replace('_', ' ', $type));
+        return $this->tobaccoType?->name;
     }
 
     public static function normalizeSearchTerm(string $term): string {
@@ -158,6 +158,19 @@ class Flavor extends Model {
 
             if (is_string($term)) {
                 $query->matchingText($column, $term);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        // Spec 012: el filtro "Tipo" busca en el nombre del tipo, sin mayúsculas ni acentos.
+        $type = $filters['tobacco_type'] ?? null;
+        if (!$isEmpty($type)) {
+            if (is_string($type)) {
+                $query->whereHas('tobaccoType', function (Builder $types) use ($type) {
+                    $expression = self::normalizedExpression($types->getGrammar()->wrap('tobacco_types.name'));
+                    $types->whereRaw("{$expression} like ?", ['%' . self::normalizeSearchTerm($type) . '%']);
+                });
             } else {
                 $query->whereRaw('1 = 0');
             }

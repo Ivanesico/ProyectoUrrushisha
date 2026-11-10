@@ -29,6 +29,7 @@ class FavoriteController extends Controller {
                     'flavor' => fn ($query) => $query->withAvg('ratings', 'stars')->withCount('ratings'),
                     'flavor.brand',
                     'flavor.category',
+                    'flavor.tobaccoType',
                     'flavor.prices',
                 ])
                 ->where('user_id', Auth::id())
@@ -56,7 +57,8 @@ class FavoriteController extends Controller {
             'sorts' => self::SORTS,
             'brands' => $this->optionsFrom($allFavorites, 'brand'),
             'categories' => $this->optionsFrom($allFavorites, 'category'),
-            'tobaccoTypes' => $this->tobaccoTypesFrom($allFavorites),
+            // Spec 012: los tipos de la tabla que tienen los favoritos, como marcas y categorías.
+            'tobaccoTypes' => $this->optionsFrom($allFavorites, 'tobaccoType'),
             'userRatings' => $userRatings,
         ]);
     }
@@ -89,7 +91,8 @@ class FavoriteController extends Controller {
     }
 
     private function matchesFilters(Flavor $flavor, Request $request): bool {
-        foreach (['brand_id', 'category_id'] as $column) {
+        // Spec 012: el tipo de tabaco se filtra por id, como la marca y la categoría.
+        foreach (['brand_id', 'category_id', 'tobacco_type_id'] as $column) {
             if ($request->filled($column)) {
                 $id = filter_var($request->input($column), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 
@@ -97,10 +100,6 @@ class FavoriteController extends Controller {
                     return false;
                 }
             }
-        }
-
-        if ($request->filled('tobacco_type') && $request->input('tobacco_type') !== $flavor->tobacco_type) {
-            return false;
         }
 
         if ($request->filled('search')) {
@@ -165,7 +164,7 @@ class FavoriteController extends Controller {
     private function filterValues(Request $request): array {
         $filters = [];
 
-        foreach (['search', 'brand_id', 'category_id', 'tobacco_type'] as $filter) {
+        foreach (['search', 'brand_id', 'category_id', 'tobacco_type_id'] as $filter) {
             $value = $request->input($filter);
             $filters[$filter] = is_string($value) ? $value : '';
         }
@@ -180,18 +179,5 @@ class FavoriteController extends Controller {
                 ->unique('id')
                 ->sortBy(fn ($option) => Flavor::normalizeSearchTerm($option->name))
                 ->values();
-    }
-
-    private function tobaccoTypesFrom(Collection $favorites): array {
-        $present = $favorites->map(fn (Favorite $favorite) => $favorite->flavor->tobacco_type)->all();
-        $types = [];
-
-        foreach (Flavor::TOBACCO_TYPES as $type) {
-            if (in_array($type, $present, true)) {
-                $types[$type] = Flavor::tobaccoTypeLabel($type);
-            }
-        }
-
-        return $types;
     }
 }
