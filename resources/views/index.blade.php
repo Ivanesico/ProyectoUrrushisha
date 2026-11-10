@@ -40,7 +40,8 @@
         </div>
 
         <div id="filtersContent" class="filters-content-mobile">
-            <form method="GET" action="{{ route('home') }}" class="row g-3 mt-1">
+            <form method="GET" action="{{ route('home') }}" class="filters-form row g-3 mt-1">
+                <input type="hidden" name="sort" value="{{ $sort }}">
                 <div class="col-md-6 col-xl-3">
                     <label for="name" class="form-label filter-label">Nombre</label>
                     <input
@@ -105,7 +106,8 @@
                     <button type="submit" class="btn btn-primary btn-modern btn-gradient">
                         Aplicar filtros
                     </button>
-                    <a href="{{ route('home') }}" class="btn btn-outline-light btn-modern">
+                    {{-- Quita la búsqueda y los filtros, pero mantiene el orden elegido --}}
+                    <a href="{{ route('home', $sort !== 'recent' ? ['sort' => $sort] : []) }}" class="btn btn-outline-light btn-modern">
                         Limpiar
                     </a>
                 </div>
@@ -114,17 +116,58 @@
         </div>
     </section>
 
-    <section class="mb-3 d-flex justify-content-between align-items-center">
+    <section class="catalog-heading mb-3 d-flex flex-wrap justify-content-between align-items-end gap-3">
         <div>
             <h2 class="section-title mb-1">Sabores disponibles</h2>
             <p class="section-subtitle mb-0">
                 {{ $flavors->total() }} resultados encontrados
             </p>
         </div>
+
+        {{-- Al elegir un orden se envía al momento, con la búsqueda y los filtros activos y sin page (vuelve a la página 1) --}}
+        <form method="GET" action="{{ route('home') }}" class="sort-form">
+            @foreach($filters as $filter => $value)
+            @if($value !== '')
+            <input type="hidden" name="{{ $filter }}" value="{{ $value }}">
+            @endif
+            @endforeach
+            <label for="sort" class="form-label filter-label mb-1">Ordenar por</label>
+            <div class="d-flex gap-2">
+                <div class="flex-grow-1">
+                    <select name="sort" id="sort" class="form-select form-control-modern" onchange="this.form.submit()" data-filter-dropdown>
+                        @foreach($sorts as $value => $label)
+                        <option value="{{ $value }}"{{ $sort === $value ? ' selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <noscript>
+                    <button type="submit" class="btn btn-primary btn-modern btn-gradient">Aplicar</button>
+                </noscript>
+            </div>
+        </form>
     </section>
 
+    @if($flavors->isEmpty())
     <div class="row g-4">
-        @forelse($flavors as $flavor)
+        <div class="col-12">
+            <div class="empty-state text-center py-5 px-4">
+                <div class="empty-icon mb-3">✦</div>
+                <h3 class="empty-title">No hay sabores disponibles</h3>
+                <p class="empty-subtitle mb-0">
+                    Prueba a cambiar los filtros o añade nuevos sabores desde el panel de administración.
+                </p>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    @foreach($flavorGroups as $groupLabel => $groupFlavors)
+    @if((string) $groupLabel !== '')
+    <h3 class="catalog-group-title">{{ $groupLabel }}</h3>
+    @endif
+
+    <div class="row g-4">
+        @foreach($groupFlavors as $flavor)
         <div class="col-6 col-md-4 col-lg-3">
             <div class="card flavor-card border-0 h-100 position-relative"
                  role="button"
@@ -196,18 +239,9 @@
 
             </div>
         </div>
-        @empty
-        <div class="col-12">
-            <div class="empty-state text-center py-5 px-4">
-                <div class="empty-icon mb-3">✦</div>
-                <h3 class="empty-title">No hay sabores disponibles</h3>
-                <p class="empty-subtitle mb-0">
-                    Prueba a cambiar los filtros o añade nuevos sabores desde el panel de administración.
-                </p>
-            </div>
-        </div>
-        @endforelse
+        @endforeach
     </div>
+    @endforeach
 
     {{-- Una ventana por sabor, fuera de las tarjetas para que sus clics no lleguen a ellas --}}
     @foreach($flavors as $flavor)
@@ -362,6 +396,47 @@
     .section-subtitle {
         color: rgba(255,255,255,0.62);
         font-size: 0.95rem;
+    }
+
+    /* La lista abierta del orden queda por encima de las tarjetas (que se elevan al pasar el ratón). */
+    .catalog-heading {
+        position: relative;
+        z-index: 25;
+    }
+
+    /* Si la lista se abre hacia arriba, queda también por encima del panel de filtros (z-index 30). */
+    .catalog-heading:has(.dropdown-menu.show) {
+        z-index: 35;
+    }
+
+    .sort-form {
+        width: 15rem;
+        max-width: 100%;
+    }
+
+    /* Mismo estilo que los títulos de grupo de Favoritos. */
+    .catalog-group-title {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 1.75rem 0 0.9rem;
+        color: #ffffff;
+        font-size: 1.1rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .catalog-group-title:first-of-type {
+        margin-top: 0.5rem;
+    }
+
+    .catalog-group-title::after {
+        content: "";
+        flex: 1;
+        min-width: 1.5rem;
+        height: 2px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, rgba(139, 92, 246, 0.8), rgba(236, 72, 153, 0));
     }
 
     .flavor-card {
@@ -642,6 +717,10 @@
 
         .hero-content {
             align-items: start;
+        }
+
+        .sort-form {
+            width: 100%;
         }
 
         .filters-content-mobile {

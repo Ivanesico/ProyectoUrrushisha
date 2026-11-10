@@ -10,6 +10,15 @@ use App\Models\Category;
 
 class FlavorController extends Controller {
 
+    // Órdenes del catálogo; el primero es el de por defecto.
+    private const SORTS = [
+        'recent' => 'Añadidos recientemente',
+        'name_asc' => 'Nombre (A-Z)',
+        'name_desc' => 'Nombre (Z-A)',
+        'brand' => 'Marca',
+        'category' => 'Categoría',
+    ];
+
     /**
      * Display a listing of the resource.
      */
@@ -53,7 +62,20 @@ class FlavorController extends Controller {
             $filters[$filter] = is_string($value) ? $value : '';
         }
 
-        $flavors = $query->orderBy('name')->paginate(12)->withQueryString();
+        // Lista blanca: un valor desconocido o un array usa el orden por defecto y no llega a la consulta.
+        $sort = $request->input('sort');
+        if (!is_string($sort) || !array_key_exists($sort, self::SORTS)) {
+            $sort = 'recent';
+        }
+
+        $flavors = $query->sortedBy($sort)->paginate(12)->withQueryString();
+
+        // Al ordenar por marca o categoría, los sabores de la página se agrupan bajo su título; si no, un solo grupo sin título.
+        $flavorGroups = $flavors->getCollection()->groupBy(fn (Flavor $flavor) => match ($sort) {
+            'brand' => $flavor->brand?->name ?? 'Sin marca',
+            'category' => $flavor->category?->name ?? 'Sin categoría',
+            default => '',
+        });
 
         $favoriteIds = \App\Models\Favorite::where('user_id', $user->id)
                 ->pluck('flavor_id')
@@ -62,7 +84,7 @@ class FlavorController extends Controller {
         $brands = Brand::orderBy('name')->get();
         $categories = Category::orderBy('name')->get();
 
-        return view('index', compact('flavors', 'brands', 'categories', 'favoriteIds', 'filters'));
+        return view('index', compact('flavors', 'flavorGroups', 'brands', 'categories', 'favoriteIds', 'filters', 'sort') + ['sorts' => self::SORTS]);
     }
 
     /**

@@ -82,12 +82,61 @@ class Flavor extends Model {
             throw new InvalidArgumentException("Columna de búsqueda no permitida: {$column}");
         }
 
-        $expression = $query->getGrammar()->wrap($column);
+        $expression = self::normalizedExpression($query->getGrammar()->wrap($column));
 
+        return $query->whereRaw("{$expression} like ?", ['%' . self::normalizeSearchTerm($term) . '%']);
+    }
+
+    /**
+     * Ordena el catálogo en SQL, siempre con desempate final por id para que la paginación
+     * no repita ni pierda sabores. Los nulos van al final con CASE, que funciona igual en
+     * Postgres (nulos primero en desc) y en MySQL (nulos primero en asc).
+     */
+    public function scopeSortedBy(Builder $query, string $sort): Builder {
+        $grammar = $query->getGrammar();
+        $id = $grammar->wrap('flavors.id');
+        $name = self::normalizedExpression($grammar->wrap('flavors.name'));
+
+        switch ($sort) {
+            case 'recent':
+                $createdAt = $grammar->wrap('flavors.created_at');
+
+                return $query->orderByRaw("case when {$createdAt} is null then 1 else 0 end")
+                        ->orderByRaw("{$createdAt} desc")
+                        ->orderByRaw("{$id} desc");
+
+            case 'name_asc':
+            case 'name_desc':
+                $direction = $sort === 'name_asc' ? 'asc' : 'desc';
+
+                return $query->orderByRaw("{$name} {$direction}")->orderByRaw("{$id} asc");
+
+            case 'brand':
+            case 'category':
+                // Subconsulta y no join: con un join, "name" sería ambiguo en matchingText.
+                $table = $sort === 'brand' ? 'brands' : 'categories';
+                $foreignKey = $sort === 'brand' ? 'brand_id' : 'category_id';
+                $relatedName = '(select ' . $grammar->wrap("{$table}.name") . ' from ' . $grammar->wrapTable($table)
+                        . ' where ' . $grammar->wrap("{$table}.id") . ' = ' . $grammar->wrap("flavors.{$foreignKey}") . ')';
+
+                return $query->orderByRaw("case when {$relatedName} is null then 1 else 0 end")
+                        ->orderByRaw(self::normalizedExpression($relatedName) . ' asc')
+                        ->orderByRaw("{$name} asc")
+                        ->orderByRaw("{$id} asc");
+        }
+
+        throw new InvalidArgumentException("Orden no permitido: {$sort}");
+    }
+
+    /**
+     * Expresión SQL en minúsculas y sin acentos. Sustituye también las mayúsculas acentuadas
+     * porque lower() no las trata igual en todos los motores.
+     */
+    private static function normalizedExpression(string $expression): string {
         foreach (self::SEARCH_REPLACEMENTS as $letter => $replacement) {
             $expression = "replace({$expression}, '{$letter}', '{$replacement}')";
         }
 
-        return $query->whereRaw("lower({$expression}) like ?", ['%' . self::normalizeSearchTerm($term) . '%']);
+        return "lower({$expression})";
     }
 }

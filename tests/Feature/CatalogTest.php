@@ -66,7 +66,7 @@ class CatalogTest extends TestCase
             Flavor::factory()->create(['name' => $name]);
         }
 
-        $response = $this->catalog();
+        $response = $this->catalog(['sort' => 'name_asc']);
 
         $this->assertSame(['Arándano', 'Banana', 'Coco'], $this->names($response));
         $response->assertSeeInOrder(['Arándano', 'Banana', 'Coco']);
@@ -75,7 +75,11 @@ class CatalogTest extends TestCase
     public function test_it_shows_twelve_flavors_per_page(): void
     {
         foreach (range(1, 13) as $number) {
-            Flavor::factory()->create(['name' => sprintf('Sabor %02d', $number)]);
+            // El orden por defecto es el de alta: el sabor 13 es el más antiguo y queda el último.
+            Flavor::factory()->create([
+                'name' => sprintf('Sabor %02d', $number),
+                'created_at' => now()->subMinutes($number),
+            ]);
         }
 
         $firstPage = $this->catalog();
@@ -93,6 +97,7 @@ class CatalogTest extends TestCase
             Flavor::factory()->create([
                 'name' => sprintf('Menta %02d', $number),
                 'tobacco_type' => 'negro',
+                'created_at' => now()->subMinutes($number),
             ]);
         }
         Flavor::factory()->create(['name' => 'Coco', 'tobacco_type' => 'rubio']);
@@ -103,6 +108,344 @@ class CatalogTest extends TestCase
         $secondPage = $this->catalog(['name' => 'menta', 'tobacco_type' => 'negro', 'page' => 2]);
         $this->assertSame(['Menta 13'], $this->names($secondPage));
         $secondPage->assertSee('?name=menta&tobacco_type=negro&page=1');
+    }
+
+    // Spec 004, RF2: orden en SQL, antes de paginar, con desempate final por id.
+    public function test_the_default_order_is_recently_added_with_nulls_last(): void
+    {
+        Flavor::factory()->create(['name' => 'Antiguo', 'created_at' => now()->subDays(2)]);
+        $sameMoment = now()->subDay();
+        Flavor::factory()->create(['name' => 'Mismo momento A', 'created_at' => $sameMoment]);
+        Flavor::factory()->create(['name' => 'Mismo momento B', 'created_at' => $sameMoment]);
+        Flavor::factory()->create(['name' => 'Nuevo', 'created_at' => now()]);
+        $withoutDate = [
+            Flavor::factory()->create(['name' => 'Sin fecha A'])->id,
+            Flavor::factory()->create(['name' => 'Sin fecha B'])->id,
+        ];
+        Flavor::whereIn('id', $withoutDate)->update(['created_at' => null]);
+
+        $expected = ['Nuevo', 'Mismo momento B', 'Mismo momento A', 'Antiguo', 'Sin fecha B', 'Sin fecha A'];
+
+        $default = $this->catalog();
+        $this->assertSame($expected, $this->names($default));
+        $this->assertSame('recent', $default->viewData('sort'));
+        $this->assertSame($expected, $this->names($this->catalog(['sort' => 'recent'])));
+    }
+
+    public function test_it_orders_by_name_ignoring_case_and_accents(): void
+    {
+        foreach (['Coco', 'árbol', 'banana', 'ÁNGEL', 'Ñame', 'nube'] as $name) {
+            Flavor::factory()->create(['name' => $name]);
+        }
+
+        $ascending = ['ÁNGEL', 'árbol', 'banana', 'Coco', 'Ñame', 'nube'];
+
+        $this->assertSame($ascending, $this->names($this->catalog(['sort' => 'name_asc'])));
+        $this->assertSame(array_reverse($ascending), $this->names($this->catalog(['sort' => 'name_desc'])));
+    }
+
+    public function test_equal_names_are_ordered_by_id(): void
+    {
+        $first = Flavor::factory()->create(['name' => 'MENTA']);
+        $second = Flavor::factory()->create(['name' => 'Menta']);
+
+        $ids = fn (TestResponse $response): array => $response->viewData('flavors')->pluck('id')->all();
+
+        $this->assertSame([$first->id, $second->id], $ids($this->catalog(['sort' => 'name_asc'])));
+        $this->assertSame([$first->id, $second->id], $ids($this->catalog(['sort' => 'name_desc'])));
+    }
+
+    public function test_it_orders_by_brand_and_then_by_name(): void
+    {
+        $zeta = Brand::factory()->create(['name' => 'Zeta']);
+        $alfa = Brand::factory()->create(['name' => 'ÁLFA']);
+        $beta = Brand::factory()->create(['name' => 'beta']);
+
+        Flavor::factory()->create(['name' => 'Coco', 'brand_id' => $zeta->id]);
+        Flavor::factory()->create(['name' => 'menta', 'brand_id' => $alfa->id]);
+        Flavor::factory()->create(['name' => 'Árbol', 'brand_id' => $alfa->id]);
+        Flavor::factory()->create(['name' => 'Uva', 'brand_id' => $beta->id]);
+
+        $this->assertSame(['Árbol', 'menta', 'Uva', 'Coco'], $this->names($this->catalog(['sort' => 'brand'])));
+    }
+
+    public function test_it_orders_by_category_with_the_flavors_without_category_last(): void
+    {
+        $zeta = Category::factory()->create(['name' => 'Zeta']);
+        $acido = Category::factory()->create(['name' => 'Ácido']);
+
+        Flavor::factory()->create(['name' => 'Aaa sin categoría', 'category_id' => null]);
+        Flavor::factory()->create(['name' => 'Coco', 'category_id' => $zeta->id]);
+        Flavor::factory()->create(['name' => 'Menta', 'category_id' => $acido->id]);
+        Flavor::factory()->create(['name' => 'banana', 'category_id' => $acido->id]);
+
+        $this->assertSame(
+            ['banana', 'Menta', 'Coco', 'Aaa sin categoría'],
+            $this->names($this->catalog(['sort' => 'category'])),
+        );
+    }
+
+    public function test_the_order_is_applied_together_with_the_filters(): void
+    {
+        foreach (['Menta azul', 'Coco', 'Menta fresca'] as $name) {
+            Flavor::factory()->create(['name' => $name]);
+        }
+
+        $this->assertSame(
+            ['Menta fresca', 'Menta azul'],
+            $this->names($this->catalog(['name' => 'menta', 'sort' => 'name_desc'])),
+        );
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function sorts(): array
+    {
+        return [
+            'recientes' => ['recent'],
+            'nombre A-Z' => ['name_asc'],
+            'nombre Z-A' => ['name_desc'],
+            'marca' => ['brand'],
+            'categoría' => ['category'],
+        ];
+    }
+
+    #[DataProvider('sorts')]
+    public function test_going_through_the_pages_shows_each_flavor_once(string $sort): void
+    {
+        $brand = Brand::factory()->create();
+        $category = Category::factory()->create();
+        $created = now()->subDay();
+        $ids = [];
+
+        foreach (range(1, 20) as $number) {
+            $ids[] = Flavor::factory()->create([
+                'name' => 'Menta',
+                'brand_id' => $brand->id,
+                'category_id' => $number % 2 ? $category->id : null,
+                'created_at' => $created,
+            ])->id;
+        }
+
+        $seen = [];
+        foreach ([1, 2] as $page) {
+            array_push($seen, ...$this->catalog(['sort' => $sort, 'page' => $page])->viewData('flavors')->pluck('id')->all());
+        }
+
+        $this->assertCount(20, $seen);
+        $this->assertEqualsCanonicalizing($ids, $seen);
+    }
+
+    // Spec 004, RF5: un orden fuera de la lista blanca usa el orden por defecto y no llega a la consulta.
+    public function test_an_unknown_or_array_sort_uses_the_default_order(): void
+    {
+        Flavor::factory()->create(['name' => 'Antiguo', 'created_at' => now()->subDay()]);
+        Flavor::factory()->create(['name' => 'Nuevo', 'created_at' => now()]);
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries) {
+            $queries[] = $query->sql.' '.implode(' ', array_map('strval', $query->bindings));
+        });
+
+        foreach (['/?sort=name%3B%20drop%20table%20flavors', '/?sort=NAME_ASC', '/?sort[]=name_asc', '/?sort[name_asc]=1'] as $url) {
+            $response = $this->get($url);
+
+            $response->assertOk();
+            $this->assertSame(['Nuevo', 'Antiguo'], $this->names($response));
+            $this->assertSame('recent', $response->viewData('sort'));
+        }
+
+        foreach ($queries as $sql) {
+            $this->assertStringNotContainsString('drop table', $sql);
+        }
+    }
+
+    private function sortForm(string $content): string
+    {
+        $this->assertSame(1, preg_match('#<form[^>]*class="[^"]*sort-form[^"]*"[^>]*>.*?</form>#s', $content, $match), 'Falta el formulario de orden');
+
+        return $match[0];
+    }
+
+    private function filtersForm(string $content): string
+    {
+        $this->assertSame(1, preg_match('#<form[^>]*class="[^"]*filters-form[^"]*"[^>]*>.*?</form>#s', $content, $match), 'Falta el formulario de filtros');
+
+        return $match[0];
+    }
+
+    private function clearLink(string $content): string
+    {
+        $this->assertSame(1, preg_match('#<a href="([^"]*)"[^>]*>\s*Limpiar\s*</a>#', $content, $match), 'Falta el enlace Limpiar');
+
+        return html_entity_decode($match[1]);
+    }
+
+    // Spec 004, RF1 y RF6: selector junto al título, con el dropdown y "Aplicar" solo sin JS.
+    public function test_the_sort_selector_lists_the_options_and_marks_the_current_one(): void
+    {
+        $content = $this->catalog(['sort' => 'brand'])->getContent();
+        $form = $this->sortForm($content);
+
+        $this->assertStringContainsString('action="'.route('home').'"', $form);
+        $this->assertStringContainsString('method="GET"', $form);
+        $this->assertMatchesRegularExpression('/<label for="sort"[^>]*>\s*Ordenar por\s*<\/label>/', $form);
+        $this->assertMatchesRegularExpression('/<select name="sort" id="sort"[^>]*onchange="this\.form\.submit\(\)"[^>]*data-filter-dropdown/', $form);
+        $this->assertSame(1, substr_count($content, 'id="sort"'));
+
+        preg_match_all('/<option value="(\w+)"( selected)?>\s*([^<]+?)\s*<\/option>/', $form, $options, PREG_SET_ORDER);
+        $this->assertSame(
+            ['recent' => 'Añadidos recientemente', 'name_asc' => 'Nombre (A-Z)', 'name_desc' => 'Nombre (Z-A)', 'brand' => 'Marca', 'category' => 'Categoría'],
+            collect($options)->mapWithKeys(fn ($option) => [$option[1] => $option[3]])->all(),
+        );
+        $this->assertSame(['brand'], collect($options)->filter(fn ($option) => $option[2] !== '')->pluck(1)->values()->all());
+
+        // El botón "Aplicar" solo existe sin JS.
+        $this->assertMatchesRegularExpression('#<noscript>\s*<button type="submit"[^>]*>\s*Aplicar\s*</button>\s*</noscript>#', $form);
+        $this->assertSame(1, substr_count($form, '<button'));
+    }
+
+    public function test_the_sort_selector_marks_recent_by_default(): void
+    {
+        $form = $this->sortForm($this->catalog()->getContent());
+
+        $this->assertStringContainsString('<option value="recent" selected>', $form);
+        $this->assertSame(1, substr_count($form, ' selected>'));
+    }
+
+    // Spec 004, RF4: el formulario de orden lleva la búsqueda y los filtros activos, sin page.
+    public function test_the_sort_form_keeps_the_active_search_and_filters_without_page(): void
+    {
+        $brand = Brand::factory()->create();
+        $form = $this->sortForm($this->catalog([
+            'name' => 'Piña "dulce"',
+            'brand_id' => $brand->id,
+            'category_id' => '',
+            'tobacco_type' => 'rojo',
+            'page' => 2,
+        ])->getContent());
+
+        $this->assertStringContainsString('<input type="hidden" name="name" value="Piña &quot;dulce&quot;">', $form);
+        $this->assertStringContainsString('<input type="hidden" name="brand_id" value="'.$brand->id.'">', $form);
+        $this->assertStringContainsString('<input type="hidden" name="tobacco_type" value="rojo">', $form);
+        $this->assertStringNotContainsString('name="category_id"', $form);
+        $this->assertStringNotContainsString('name="ingredient"', $form);
+        $this->assertStringNotContainsString('name="page"', $form);
+        $this->assertSame(3, substr_count($form, 'type="hidden"'));
+    }
+
+    public function test_the_sort_form_has_no_hidden_fields_without_filters(): void
+    {
+        $this->assertStringNotContainsString('type="hidden"', $this->sortForm($this->catalog()->getContent()));
+    }
+
+    public function test_the_filters_form_keeps_the_sort(): void
+    {
+        $form = $this->filtersForm($this->catalog(['sort' => 'name_desc'])->getContent());
+        $this->assertStringContainsString('<input type="hidden" name="sort" value="name_desc">', $form);
+
+        $form = $this->filtersForm($this->catalog(['sort' => 'no-existe'])->getContent());
+        $this->assertStringContainsString('<input type="hidden" name="sort" value="recent">', $form);
+    }
+
+    public function test_the_pagination_keeps_the_sort_and_the_filters(): void
+    {
+        foreach (range(1, 13) as $number) {
+            Flavor::factory()->create(['name' => sprintf('Menta %02d', $number)]);
+        }
+
+        $firstPage = $this->catalog(['name' => 'menta', 'sort' => 'name_desc']);
+        $firstPage->assertSee('?name=menta&sort=name_desc&page=2');
+
+        $secondPage = $this->catalog(['name' => 'menta', 'sort' => 'name_desc', 'page' => 2]);
+        $this->assertSame(['Menta 01'], $this->names($secondPage));
+        $secondPage->assertSee('?name=menta&sort=name_desc&page=1');
+    }
+
+    public function test_clear_removes_the_filters_but_keeps_the_sort(): void
+    {
+        $content = $this->catalog(['name' => 'menta', 'tobacco_type' => 'rojo', 'sort' => 'category'])->getContent();
+        $this->assertSame(route('home', ['sort' => 'category']), $this->clearLink($content));
+
+        $content = $this->catalog(['name' => 'menta', 'sort' => 'recent'])->getContent();
+        $this->assertSame(route('home'), $this->clearLink($content));
+
+        $content = $this->catalog(['name' => 'menta'])->getContent();
+        $this->assertSame(route('home'), $this->clearLink($content));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function groupTitles(string $content): array
+    {
+        preg_match_all('#<h3 class="catalog-group-title">\s*(.*?)\s*</h3>#s', $content, $matches);
+
+        return array_map('html_entity_decode', $matches[1]);
+    }
+
+    // Spec 004, RF3: al ordenar por marca o categoría, la página se agrupa con títulos.
+    public function test_sorting_by_brand_groups_the_flavors_under_their_brand(): void
+    {
+        $zeta = Brand::factory()->create(['name' => 'Zeta']);
+        $alfa = Brand::factory()->create(['name' => 'Alfa & Co']);
+
+        Flavor::factory()->create(['name' => 'Coco', 'brand_id' => $zeta->id]);
+        Flavor::factory()->create(['name' => 'Menta', 'brand_id' => $alfa->id]);
+        Flavor::factory()->create(['name' => 'Uva', 'brand_id' => $alfa->id]);
+
+        $content = $this->catalog(['sort' => 'brand'])->getContent();
+
+        $this->assertSame(['Alfa & Co', 'Zeta'], $this->groupTitles($content));
+        $this->assertMatchesRegularExpression('#Alfa &amp; Co\s*</h3>.*Menta.*Uva.*Zeta\s*</h3>.*Coco#s', $content);
+    }
+
+    public function test_sorting_by_category_groups_the_flavors_and_names_the_ones_without_category(): void
+    {
+        $zeta = Category::factory()->create(['name' => 'Zeta']);
+        $acido = Category::factory()->create(['name' => 'Ácido']);
+
+        Flavor::factory()->create(['name' => 'Aaa suelto', 'category_id' => null]);
+        Flavor::factory()->create(['name' => 'Coco', 'category_id' => $zeta->id]);
+        Flavor::factory()->create(['name' => 'Menta', 'category_id' => $acido->id]);
+
+        $content = $this->catalog(['sort' => 'category'])->getContent();
+
+        $this->assertSame(['Ácido', 'Zeta', 'Sin categoría'], $this->groupTitles($content));
+
+        // Cada sabor sigue teniendo su ventana de detalle.
+        foreach (Flavor::all() as $flavor) {
+            $this->detailModal($content, $flavor);
+        }
+    }
+
+    public function test_a_group_that_continues_on_the_next_page_repeats_its_title(): void
+    {
+        $alfa = Brand::factory()->create(['name' => 'Alfa']);
+        $beta = Brand::factory()->create(['name' => 'Beta']);
+
+        foreach (range(1, 11) as $number) {
+            Flavor::factory()->create(['name' => sprintf('Sabor %02d', $number), 'brand_id' => $alfa->id]);
+        }
+        foreach (range(1, 3) as $number) {
+            Flavor::factory()->create(['name' => sprintf('Sabor %02d', $number), 'brand_id' => $beta->id]);
+        }
+
+        $this->assertSame(['Alfa', 'Beta'], $this->groupTitles($this->catalog(['sort' => 'brand'])->getContent()));
+        $this->assertSame(['Beta'], $this->groupTitles($this->catalog(['sort' => 'brand', 'page' => 2])->getContent()));
+    }
+
+    public function test_other_sorts_have_no_group_titles(): void
+    {
+        Flavor::factory()->count(3)->create();
+
+        foreach (['recent', 'name_asc', 'name_desc'] as $sort) {
+            $content = $this->catalog(['sort' => $sort])->getContent();
+
+            $this->assertSame([], $this->groupTitles($content), $sort);
+            $this->assertStringNotContainsString('class="catalog-group-title"', $content);
+        }
     }
 
     // RF-11
@@ -498,7 +841,8 @@ class CatalogTest extends TestCase
         $response->assertOk();
         $this->assertSame('', $response->viewData('filters')['brand_id']);
         $this->assertSame('', $response->viewData('filters')['category_id']);
-        $response->assertDontSee(' selected>', false);
+        // El selector de orden siempre tiene una opción elegida; las de marca y categoría (ids) no.
+        $this->assertDoesNotMatchRegularExpression('/<option value="\d+" selected>/', $response->getContent());
     }
 
     // RF-61 (desde la spec 003, el enlace está en la ventana de cada sabor: hace falta uno)
