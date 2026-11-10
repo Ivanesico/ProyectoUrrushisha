@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use App\Models\Favorite;
 use App\Models\Flavor;
+use App\Models\FlavorRating;
 use Illuminate\Support\Facades\Auth;
 
 class FavoriteController extends Controller {
@@ -23,9 +24,22 @@ class FavoriteController extends Controller {
     // Se filtra y ordena en PHP: son solo los favoritos de un usuario, el resultado es igual
     // en MySQL y en Postgres, y un valor no válido de la URL nunca llega a una consulta.
     public function index(Request $request) {
-        $allFavorites = Favorite::with('flavor.brand', 'flavor.category', 'flavor.prices')
+        // Spec 011: media y número de valoraciones para la ventana de detalle.
+        $allFavorites = Favorite::with([
+                    'flavor' => fn ($query) => $query->withAvg('ratings', 'stars')->withCount('ratings'),
+                    'flavor.brand',
+                    'flavor.category',
+                    'flavor.prices',
+                ])
                 ->where('user_id', Auth::id())
                 ->get();
+
+        // Spec 011: puntuación propia de los favoritos (flavor_id => estrellas), en una consulta.
+        $userRatings = FlavorRating::where('user_id', Auth::id())
+                ->whereIn('flavor_id', $allFavorites->pluck('flavor_id'))
+                ->pluck('stars', 'flavor_id')
+                ->map(fn ($stars) => (int) $stars)
+                ->all();
 
         $sort = $request->input('sort');
         $sort = is_string($sort) && array_key_exists($sort, self::SORTS) ? $sort : 'name_asc';
@@ -43,6 +57,7 @@ class FavoriteController extends Controller {
             'brands' => $this->optionsFrom($allFavorites, 'brand'),
             'categories' => $this->optionsFrom($allFavorites, 'category'),
             'tobaccoTypes' => $this->tobaccoTypesFrom($allFavorites),
+            'userRatings' => $userRatings,
         ]);
     }
 

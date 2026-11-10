@@ -312,7 +312,8 @@ class CatalogTest extends TestCase
 
         preg_match_all('/<option value="(\w+)"( selected)?>\s*([^<]+?)\s*<\/option>/', $form, $options, PREG_SET_ORDER);
         $this->assertSame(
-            ['recent' => 'Añadidos recientemente', 'name_asc' => 'Nombre (A-Z)', 'name_desc' => 'Nombre (Z-A)', 'brand' => 'Marca', 'category' => 'Categoría'],
+            // Spec 011: "Mejor valorados" al final.
+            ['recent' => 'Añadidos recientemente', 'name_asc' => 'Nombre (A-Z)', 'name_desc' => 'Nombre (Z-A)', 'brand' => 'Marca', 'category' => 'Categoría', 'top_rated' => 'Mejor valorados'],
             collect($options)->mapWithKeys(fn ($option) => [$option[1] => $option[3]])->all(),
         );
         $this->assertSame(['brand'], collect($options)->filter(fn ($option) => $option[2] !== '')->pluck(1)->values()->all());
@@ -1203,6 +1204,120 @@ class CatalogTest extends TestCase
         Favorite::create(['user_id' => auth()->id(), 'flavor_id' => $flavor->id]);
 
         $this->get(route('favorites.index'))->assertOk()->assertSee('50 g · 12,50 €');
+    }
+
+    /**
+     * Spec 011: valoraciones de usuarios nuevos a un sabor.
+     *
+     * @param  array<int, int>  $stars
+     */
+    private function rate(Flavor $flavor, array $stars): void
+    {
+        foreach ($stars as $value) {
+            \App\Models\FlavorRating::create(['user_id' => User::factory()->create()->id, 'flavor_id' => $flavor->id, 'stars' => $value]);
+        }
+    }
+
+    // Spec 011, RF6: "Mejor valorados": media, después número de valoraciones, después el más nuevo; sin valoraciones al final.
+    public function test_top_rated_sorts_by_average_then_count_then_newest(): void
+    {
+        $flavors = [];
+        foreach (['Pocas', 'Muchas', 'Cinco', 'Sin valorar', 'Tres viejo', 'Tres nuevo'] as $index => $name) {
+            $flavors[$name] = Flavor::factory()->create(['name' => $name, 'created_at' => now()->subDays(10 - $index)]);
+        }
+        // "Sin valorar" es el más nuevo de los que no tienen valoraciones, pero va al final igualmente.
+        $flavors['Sin valorar']->update(['created_at' => now()]);
+
+        $this->rate($flavors['Pocas'], [4, 5]);
+        $this->rate($flavors['Muchas'], [4, 5, 4, 5]);
+        $this->rate($flavors['Cinco'], [5]);
+        $this->rate($flavors['Tres viejo'], [3]);
+        $this->rate($flavors['Tres nuevo'], [3]);
+
+        $this->assertSame(
+            ['Cinco', 'Muchas', 'Pocas', 'Tres nuevo', 'Tres viejo', 'Sin valorar'],
+            $this->names($this->catalog(['sort' => 'top_rated']))
+        );
+    }
+
+    // Spec 011, RF7: el filtro "Valoración" usa la media redondeada a un decimal; sin valoraciones no sale.
+    public function test_the_minimum_rating_filter_uses_the_rounded_average(): void
+    {
+        $four = Flavor::factory()->create(['name' => 'Cuatro']);
+        $almostFour = Flavor::factory()->create(['name' => 'Casi cuatro']);
+        $two = Flavor::factory()->create(['name' => 'Dos']);
+        Flavor::factory()->create(['name' => 'Sin valorar']);
+
+        $this->rate($four, [4, 4]);
+        $this->rate($almostFour, [4, 4, 4, 3]); // 3,75 → 3,8
+        $this->rate($two, [2]);
+
+        $this->assertEqualsCanonicalizing(['Cuatro'], $this->names($this->catalog(['min_rating' => '4'])));
+        $this->assertEqualsCanonicalizing(['Cuatro', 'Casi cuatro'], $this->names($this->catalog(['min_rating' => '3'])));
+        $this->assertEqualsCanonicalizing(['Cuatro', 'Casi cuatro', 'Dos'], $this->names($this->catalog(['min_rating' => '2'])));
+    }
+
+    // Spec 011, RF7: un valor distinto de 2, 3 o 4 se ignora, sin error.
+    public function test_odd_minimum_rating_values_are_ignored(): void
+    {
+        Flavor::factory()->create(['name' => 'Sin valorar']);
+
+        foreach (['1', '5', '4.5', 'abc', ['4']] as $value) {
+            $this->assertSame(['Sin valorar'], $this->names($this->catalog(['min_rating' => $value])));
+        }
+    }
+
+    // Spec 011, RF7: se combina con los demás filtros y con la paginación, y "Limpiar" lo quita.
+    public function test_the_minimum_rating_filter_combines_and_is_kept_in_links(): void
+    {
+        foreach (range(1, 13) as $number) {
+            $this->rate(Flavor::factory()->create(['name' => sprintf('Menta %02d', $number)]), [5]);
+        }
+        $this->rate(Flavor::factory()->create(['name' => 'Fresa']), [5]);
+        $this->rate(Flavor::factory()->create(['name' => 'Menta floja']), [2]);
+
+        $response = $this->catalog(['name' => 'menta', 'min_rating' => '4', 'sort' => 'name_asc']);
+
+        $this->assertSame(13, $response->viewData('flavors')->total());
+        $this->assertStringContainsString('min_rating=4', $response->viewData('flavors')->nextPageUrl());
+        $response->assertSee('href="'.route('home', ['sort' => 'name_asc']).'"', false);
+        $response->assertSee('<input type="hidden" name="min_rating" value="4">', false);
+    }
+
+    // Spec 011, RF7: el panel tiene el filtro "Valoración" con sus opciones y el valor actual.
+    public function test_the_filter_panel_has_the_minimum_rating(): void
+    {
+        $form = $this->filtersForm($this->catalog(['min_rating' => '3'])->getContent());
+
+        // Etiqueta "Valoración" (decisión del usuario).
+        $this->assertMatchesRegularExpression('/<label for="min_rating"[^>]*>Valoración<\/label>/', $form);
+        $this->assertStringNotContainsString('Mínimo', $form);
+        foreach (['' => 'Cualquiera', '2' => '2+', '3' => '3+', '4' => '4+'] as $value => $label) {
+            $this->assertMatchesRegularExpression('/<option value="'.$value.'"( selected)?>'.preg_quote($label, '/').'<\/option>/', $form);
+        }
+        $this->assertStringContainsString('<option value="3" selected>3+</option>', $form);
+    }
+
+    // Spec 011, RF4: la tarjeta muestra solo la media (sin el número), en la misma fila que el precio y a su derecha;
+    // sin valoraciones, el hueco está vacío y oculto.
+    public function test_the_card_shows_the_average_rating_next_to_the_price(): void
+    {
+        $rated = Flavor::factory()->create(['name' => 'Valorado']);
+        $rated->prices()->create(['grams' => 50, 'price' => 12.5]);
+        $unrated = Flavor::factory()->create(['name' => 'Sin valorar']);
+        $this->rate($rated, [5, 4, 4]);
+
+        $content = $this->catalog()->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '#<div class="flavor-card-foot">\s*<p class="flavor-price">desde 12,50 €</p>\s*<p class="flavor-rating" data-rating-card="'.$rated->id.'">★ 4,3</p>\s*</div>#',
+            $content
+        );
+        $this->assertMatchesRegularExpression(
+            '#<div class="flavor-card-foot">\s*<p class="flavor-rating" data-rating-card="'.$unrated->id.'" hidden></p>\s*</div>#',
+            $content
+        );
+        $this->assertStringNotContainsString('★ 4,3 (3)', $content);
     }
 
     private function assertNoEnglishPagination(TestResponse $response): void

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Flavor;
+use App\Models\FlavorRating;
 use App\Models\Brand;
 use App\Models\Category;
 
@@ -16,10 +17,13 @@ class FlavorController extends Controller {
     public function index(Request $request) {
         $user = auth()->user();
 
-        $filterKeys = ['name', 'brand_id', 'category_id', 'ingredient', 'tobacco_type'];
+        $filterKeys = ['name', 'brand_id', 'category_id', 'ingredient', 'tobacco_type', 'min_rating'];
 
         // prices: "desde" en la tarjeta y la lista de la ventana (spec 010), sin una consulta por sabor.
+        // ratings: media y número de valoraciones de la página (spec 011).
         $query = Flavor::with(['brand', 'category', 'prices'])
+                ->withAvg('ratings', 'stars')
+                ->withCount('ratings')
                 ->where('is_public', true)
                 ->filteredBy($request->only($filterKeys));
 
@@ -28,6 +32,11 @@ class FlavorController extends Controller {
         foreach ($filterKeys as $filter) {
             $value = $request->input($filter);
             $filters[$filter] = is_string($value) ? $value : '';
+        }
+
+        // Un mínimo de estrellas no válido se ignora en la consulta: tampoco se arrastra a los enlaces.
+        if (!in_array($filters['min_rating'], Flavor::MIN_RATINGS, true)) {
+            $filters['min_rating'] = '';
         }
 
         // Lista blanca: un valor desconocido o un array usa el orden por defecto y no llega a la consulta.
@@ -53,7 +62,16 @@ class FlavorController extends Controller {
         $brands = Brand::orderBy('name')->get();
         $categories = Category::orderBy('name')->get();
 
-        return view('index', compact('flavors', 'flavorGroups', 'brands', 'categories', 'favoriteIds', 'filters', 'sort') + ['sorts' => Flavor::CATALOG_SORTS]);
+        // Spec 011: la puntuación propia de los sabores de la página (flavor_id => estrellas), en una consulta.
+        $userRatings = $user
+                ? FlavorRating::where('user_id', $user->id)
+                        ->whereIn('flavor_id', $flavors->pluck('id'))
+                        ->pluck('stars', 'flavor_id')
+                        ->map(fn ($stars) => (int) $stars)
+                        ->all()
+                : [];
+
+        return view('index', compact('flavors', 'flavorGroups', 'brands', 'categories', 'favoriteIds', 'userRatings', 'filters', 'sort') + ['sorts' => Flavor::CATALOG_SORTS]);
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Http\Controllers\BrandController;
 use App\Http\Controllers\FlavorController;
 use App\Http\Controllers\MixController;
 use App\Http\Controllers\FavoriteController;
+use App\Http\Controllers\FlavorRatingController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\Admin\BrandController as AdminBrandController;
 use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
@@ -56,6 +57,10 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/favorites', [FavoriteController::class, 'index'])->name('favorites.index');
     Route::post('/favorites/{flavor}', [FavoriteController::class, 'store'])->name('favorites.store');
+
+    // Valoración de sabores (spec 011)
+    Route::put('/flavors/{flavor}/rating', [FlavorRatingController::class, 'update'])->name('ratings.update');
+    Route::delete('/flavors/{flavor}/rating', [FlavorRatingController::class, 'destroy'])->name('ratings.destroy');
 
     // Admin
     Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {

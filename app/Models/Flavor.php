@@ -28,7 +28,11 @@ class Flavor extends Model {
         'name_desc' => 'Nombre (Z-A)',
         'brand' => 'Marca',
         'category' => 'Categoría',
+        'top_rated' => 'Mejor valorados',
     ];
+
+    // Spec 011: opciones del filtro "Valoración" (media mínima, redondeada a un decimal).
+    public const MIN_RATINGS = ['2', '3', '4'];
 
     public const ADMIN_SORTS = self::CATALOG_SORTS + [
         'id_asc' => 'ID (menor primero)',
@@ -75,6 +79,11 @@ class Flavor extends Model {
 
     public function favorites() {
         return $this->hasMany(Favorite::class);
+    }
+
+    // Spec 011: valoraciones de 1 a 5 estrellas de los usuarios.
+    public function ratings() {
+        return $this->hasMany(FlavorRating::class);
     }
 
     // Spec 010: formatos del sabor, de menor a mayor cantidad.
@@ -159,6 +168,14 @@ class Flavor extends Model {
             $query->where('flavors.is_public', $visibility === 'public');
         }
 
+        // Spec 011: solo 2, 3 o 4; cualquier otro valor se ignora. Sin valoraciones, el sabor no sale.
+        $minRating = $filters['min_rating'] ?? null;
+        if (is_string($minRating) && in_array($minRating, self::MIN_RATINGS, true)) {
+            $query->whereIn('flavors.id', FlavorRating::select('flavor_id')
+                    ->groupBy('flavor_id')
+                    ->havingRaw('round(avg(stars), 1) >= ?', [(int) $minRating]));
+        }
+
         $missing = $filters['missing'] ?? null;
         if (is_string($missing) && array_key_exists($missing, self::MISSING_FILTERS)) {
             $column = 'flavors.' . self::MISSING_FILTERS[$missing];
@@ -183,6 +200,22 @@ class Flavor extends Model {
                 $createdAt = $grammar->wrap('flavors.created_at');
 
                 return $query->orderByRaw("case when {$createdAt} is null then 1 else 0 end")
+                        ->orderByRaw("{$createdAt} desc")
+                        ->orderByRaw("{$id} desc");
+
+            case 'top_rated':
+                // Spec 011: subconsultas y no el alias de withAvg, que Postgres no admite dentro de una
+                // expresión de ORDER BY. Sin valoraciones al final; empates por número y por el más nuevo.
+                $ratings = $grammar->wrapTable('flavor_ratings');
+                $ratedFlavor = $grammar->wrap('flavor_ratings.flavor_id');
+                $average = "(select avg({$grammar->wrap('flavor_ratings.stars')}) from {$ratings} where {$ratedFlavor} = {$id})";
+                $count = "(select count(*) from {$ratings} where {$ratedFlavor} = {$id})";
+                $createdAt = $grammar->wrap('flavors.created_at');
+
+                return $query->orderByRaw("case when {$count} = 0 then 1 else 0 end")
+                        ->orderByRaw("{$average} desc")
+                        ->orderByRaw("{$count} desc")
+                        ->orderByRaw("case when {$createdAt} is null then 1 else 0 end")
                         ->orderByRaw("{$createdAt} desc")
                         ->orderByRaw("{$id} desc");
 

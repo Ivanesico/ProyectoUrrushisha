@@ -42,7 +42,7 @@
         <div id="filtersContent" class="filters-content-mobile">
             <form method="GET" action="{{ route('home') }}" class="filters-form row g-3 mt-1">
                 <input type="hidden" name="sort" value="{{ $sort }}">
-                <div class="col-md-6 col-xl-3">
+                <div class="col-md-6 col-xl-2">
                     <label for="name" class="form-label filter-label">Nombre</label>
                     <input
                         type="text"
@@ -54,7 +54,7 @@
                         >
                 </div>
 
-                <div class="col-md-6 col-xl-3">
+                <div class="col-md-6 col-xl-2">
                     <label for="brand_id" class="form-label filter-label">Marca</label>
                     <select name="brand_id" id="brand_id" class="form-select form-control-modern" data-filter-dropdown>
                         <option value="">Todas las marcas</option>
@@ -100,6 +100,16 @@
                         value="{{ $filters['tobacco_type'] }}"
                         placeholder="Ej. rubio"
                         >
+                </div>
+
+                {{-- Spec 011: media mínima, redondeada a un decimal --}}
+                <div class="col-md-6 col-xl-2">
+                    <label for="min_rating" class="form-label filter-label">Valoración</label>
+                    <select name="min_rating" id="min_rating" class="form-select form-control-modern" data-filter-dropdown>
+                        @foreach(['' => 'Cualquiera', '2' => '2+', '3' => '3+', '4' => '4+'] as $value => $label)
+                        <option value="{{ $value }}"{{ $filters['min_rating'] === (string) $value ? ' selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
                 </div>
 
                 <div class="col-12 d-flex flex-wrap gap-2 pt-2">
@@ -238,10 +248,18 @@
                         {{ \Illuminate\Support\Str::limit($flavor->ingredients_text ?? 'Sin ingredientes definidos', 50) }}
                     </div>
 
-                    {{-- Spec 010: el precio más bajo de sus formatos; sin precios, nada --}}
-                    @if($flavor->prices->isNotEmpty())
-                    <p class="flavor-price">desde {{ \App\Models\FlavorPrice::formatPrice($flavor->prices->min('price')) }}</p>
-                    @endif
+                    {{-- Una fila: a la izquierda el precio más bajo (spec 010), a la derecha la media de valoraciones (spec 011) --}}
+                    <div class="flavor-card-foot">
+                        @if($flavor->prices->isNotEmpty())
+                        <p class="flavor-price">desde {{ \App\Models\FlavorPrice::formatPrice($flavor->prices->min('price')) }}</p>
+                        @endif
+                        {{-- Solo la media; sin valoraciones, vacía y oculta (la ventana la rellena al puntuar) --}}
+                        @if($flavor->ratings_count > 0)
+                        <p class="flavor-rating" data-rating-card="{{ $flavor->id }}">★ {{ \App\Models\FlavorRating::formatAverage(\App\Models\FlavorRating::roundedAverage($flavor->ratings_avg_stars)) }}</p>
+                        @else
+                        <p class="flavor-rating" data-rating-card="{{ $flavor->id }}" hidden></p>
+                        @endif
+                    </div>
 
 
                 </div>
@@ -551,6 +569,36 @@
 
     .favorite-btn.active {
         color: #e11d48;
+    }
+
+    /* Precio a la izquierda y media de valoraciones a la derecha, en la misma fila */
+    .flavor-card-foot {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: baseline;
+        gap: 0.5rem;
+    }
+
+    .flavor-card-foot .flavor-price {
+        min-width: 0;
+        white-space: nowrap;
+    }
+
+    /* Móvil: dos tarjetas por fila; texto algo menor para que precio y media quepan en la misma fila */
+    @media (max-width: 575.98px) {
+        .flavor-card-foot .flavor-price,
+        .flavor-card-foot .flavor-rating {
+            font-size: 0.78rem;
+        }
+    }
+
+    /* Spec 011: media de valoraciones en la tarjeta */
+    .flavor-rating {
+        margin: 0 0 0 auto;
+        color: #b45309;
+        font-size: 0.92rem;
+        font-weight: 700;
+        white-space: nowrap;
     }
 
     /* Spec 010: precio más bajo en la tarjeta */

@@ -43,6 +43,38 @@
                     <h3 class="flavor-detail-section">Ingredientes</h3>
                     <div class="flavor-detail-ingredients mb-4">{{ $flavor->ingredients_text ?: 'Sin ingredientes definidos' }}</div>
 
+                    {{-- Spec 011: media, número y estrellas para puntuar (sin sesión, enlaces a login) --}}
+                    @php
+                        $ratingCount = (int) ($flavor->ratings_count ?? 0);
+                        $userStars = ($userRatings ?? [])[$flavor->id] ?? null;
+                    @endphp
+                    <h3 class="flavor-detail-section">Valoración</h3>
+                    <div class="flavor-rating-box mb-4" data-rating-box="{{ $flavor->id }}">
+                        <p class="flavor-rating-summary" data-rating-summary>@if($ratingCount > 0)★ {{ \App\Models\FlavorRating::formatAverage(\App\Models\FlavorRating::roundedAverage($flavor->ratings_avg_stars)) }} · {{ $ratingCount }} {{ $ratingCount === 1 ? 'valoración' : 'valoraciones' }}@else{{ 'Sin valoraciones todavía' }}@endif</p>
+
+                        @auth
+                        <form action="{{ route('ratings.update', $flavor) }}" method="POST" class="flavor-stars" data-rating-form="{{ $flavor->id }}">
+                            @csrf
+                            @method('PUT')
+                            @for($star = 1; $star <= 5; $star++)
+                            <button type="submit" name="stars" value="{{ $star }}" class="flavor-star{{ $userStars !== null && $star <= $userStars ? ' is-on' : '' }}" aria-label="Puntuar con {{ $star }} {{ $star === 1 ? 'estrella' : 'estrellas' }}" aria-pressed="{{ $userStars === $star ? 'true' : 'false' }}">★</button>
+                            @endfor
+                        </form>
+
+                        <form action="{{ route('ratings.destroy', $flavor) }}" method="POST" data-rating-remove="{{ $flavor->id }}"{{ $userStars === null ? ' hidden' : '' }}>
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="flavor-rating-remove">Quitar mi valoración</button>
+                        </form>
+                        @else
+                        <div class="flavor-stars">
+                            @for($star = 1; $star <= 5; $star++)
+                            <a href="{{ route('login') }}" class="flavor-star" aria-label="Inicia sesión para puntuar con {{ $star }} {{ $star === 1 ? 'estrella' : 'estrellas' }}">★</a>
+                            @endfor
+                        </div>
+                        @endauth
+                    </div><!-- /rating-box -->
+
                     {{-- Spec 010: cada formato de menor a mayor cantidad; sin precios, no aparece --}}
                     @if($flavor->prices->isNotEmpty())
                     <h3 class="flavor-detail-section">Precios</h3>
@@ -67,6 +99,65 @@
 @once
 @push('head')
 <style>
+    /* Spec 011: valoración con estrellas */
+    .flavor-rating-summary {
+        margin-bottom: 0.5rem;
+        color: #374151;
+        font-weight: 700;
+    }
+
+    .flavor-stars {
+        display: flex;
+        gap: 0.25rem;
+        margin: 0;
+    }
+
+    .flavor-star {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.75rem;
+        height: 2.75rem;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: #d1d5db;
+        font-size: 1.9rem;
+        line-height: 1;
+        text-decoration: none;
+        transition: color 0.15s ease, transform 0.15s ease;
+    }
+
+    .flavor-star.is-on {
+        color: #f59e0b;
+    }
+
+    .flavor-star:hover {
+        color: #fbbf24;
+        transform: scale(1.1);
+    }
+
+    .flavor-star:focus-visible,
+    .flavor-rating-remove:focus-visible {
+        outline: 2px solid #8b5cf6;
+        outline-offset: 2px;
+    }
+
+    .flavor-star:disabled {
+        opacity: 0.6;
+    }
+
+    .flavor-rating-remove {
+        margin-top: 0.25rem;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #6b7280;
+        font-size: 0.88rem;
+        text-decoration: underline;
+    }
+
     /* Spec 010: formatos y precios del sabor */
     .flavor-detail-prices {
         display: flex;
@@ -275,6 +366,88 @@
             bootstrap.Modal.getOrCreateInstance(modal).show();
         }
     }
+
+    // Spec 011: puntuar y quitar la valoración sin recargar. Si fetch falla, se envía el formulario normal.
+    (function () {
+        const formatAverage = (average) => average.toFixed(1).replace('.', ',');
+
+        function showRating(flavorId, data) {
+            const box = document.querySelector('[data-rating-box="' + flavorId + '"]');
+            if (!box) return;
+
+            box.querySelector('[data-rating-summary]').textContent = data.count > 0
+                ? '★ ' + formatAverage(data.average) + ' · ' + data.count + (data.count === 1 ? ' valoración' : ' valoraciones')
+                : 'Sin valoraciones todavía';
+
+            box.querySelectorAll('[data-rating-form] .flavor-star').forEach((star) => {
+                const value = Number(star.value);
+                star.classList.toggle('is-on', data.stars !== null && value <= data.stars);
+                star.setAttribute('aria-pressed', data.stars === value ? 'true' : 'false');
+            });
+
+            const remove = box.querySelector('[data-rating-remove]');
+            if (remove) remove.hidden = data.stars === null;
+
+            // La media de la tarjeta del catálogo, sin el número (en Favoritos no existe).
+            const card = document.querySelector('[data-rating-card="' + flavorId + '"]');
+            if (card) {
+                card.hidden = data.count === 0;
+                card.textContent = data.count > 0 ? '★ ' + formatAverage(data.average) : '';
+            }
+        }
+
+        function send(form, extra) {
+            const body = new FormData(form);
+            Object.entries(extra).forEach(([name, value]) => body.set(name, value));
+            const buttons = form.querySelectorAll('button');
+            buttons.forEach((button) => button.disabled = true);
+
+            fetch(form.action, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: body,
+                credentials: 'same-origin'
+            })
+                .then((response) => {
+                    if (!response.ok) throw new Error('rating failed');
+                    return response.json();
+                })
+                .then((data) => {
+                    buttons.forEach((button) => button.disabled = false);
+                    const flavorId = form.dataset.ratingForm || form.dataset.ratingRemove;
+                    showRating(flavorId, data);
+                    // El aviso es el mismo de los favoritos (solo existe con sesión, como las estrellas).
+                    if (typeof showFavoriteToast === 'function') showFavoriteToast(data.message);
+                })
+                .catch(() => {
+                    // Sin fetch, el botón pulsado no viaja con form.submit(): se añade como campo oculto.
+                    Object.entries(extra).forEach(([name, value]) => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = name;
+                        input.value = value;
+                        form.append(input);
+                    });
+                    form.submit();
+                });
+        }
+
+        document.querySelectorAll('form[data-rating-form]').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                if (!window.fetch || !event.submitter) return;
+                event.preventDefault();
+                send(form, { stars: event.submitter.value });
+            });
+        });
+
+        document.querySelectorAll('form[data-rating-remove]').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                if (!window.fetch) return;
+                event.preventDefault();
+                send(form, {});
+            });
+        });
+    })();
 </script>
 @endpush
 @endonce
