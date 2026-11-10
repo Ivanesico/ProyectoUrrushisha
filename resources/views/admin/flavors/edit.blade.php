@@ -13,6 +13,10 @@
                     <form action="{{ route('admin.flavors.update', $flavor) }}" method="POST" enctype="multipart/form-data">
                         @csrf
                         @method('PUT')
+                        {{-- Filtros, orden y página de la lista, para volver a ella al guardar --}}
+                        @foreach($listParams as $key => $value)
+                        <input type="hidden" name="list[{{ $key }}]" value="{{ $value }}">
+                        @endforeach
 
                         <div class="row g-3">
                             <div class="col-md-6">
@@ -111,7 +115,7 @@
 
                         <div class="d-flex gap-2 mt-4">
                             <button type="submit" class="btn btn-dark px-4">Actualizar sabor</button>
-                            <a href="{{ route('admin.flavors.index') }}" class="btn btn-outline-secondary px-4">Cancelar</a>
+                            <a href="{{ route('admin.flavors.index', $listParams) }}" class="btn btn-outline-secondary px-4">Cancelar</a>
                         </div>
                     </form>
 

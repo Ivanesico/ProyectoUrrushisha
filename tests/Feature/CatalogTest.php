@@ -261,6 +261,22 @@ class CatalogTest extends TestCase
         }
     }
 
+    // Spec 005, RF2: los órdenes por ID son solo del admin; la portada ni los ofrece ni los acepta.
+    public function test_the_catalog_ignores_the_id_sorts_of_the_admin(): void
+    {
+        Flavor::factory()->create(['name' => 'Antiguo', 'created_at' => now()->subDay()]);
+        Flavor::factory()->create(['name' => 'Nuevo', 'created_at' => now()]);
+
+        foreach (['id_asc', 'id_desc'] as $sort) {
+            $response = $this->catalog(['sort' => $sort]);
+
+            $this->assertSame(['Nuevo', 'Antiguo'], $this->names($response));
+            $this->assertSame('recent', $response->viewData('sort'));
+            $this->assertArrayNotHasKey($sort, $response->viewData('sorts'));
+            $response->assertDontSee('value="'.$sort.'"', false);
+        }
+    }
+
     private function sortForm(string $content): string
     {
         $this->assertSame(1, preg_match('#<form[^>]*class="[^"]*sort-form[^"]*"[^>]*>.*?</form>#s', $content, $match), 'Falta el formulario de orden');
