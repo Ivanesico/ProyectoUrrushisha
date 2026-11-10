@@ -296,9 +296,10 @@
                 ['route' => 'brands.index', 'active' => 'brands.*', 'label' => 'Marcas', 'icon' => 'brands'],
             ];
 
-            // Sin sesión solo se pueden ver Sabores y Marcas (spec 006)
+            // Sin sesión se ven Sabores, Marcas (spec 006) y Mezclas, que lleva a las públicas (spec 007)
             if (!auth()->check()) {
-                $navItems = array_values(array_filter($navItems, fn ($item) => in_array($item['route'], ['home', 'brands.index'], true)));
+                $navItems = array_values(array_filter($navItems, fn ($item) => in_array($item['route'], ['home', 'mixes.index', 'brands.index'], true)));
+                $navItems = array_map(fn ($item) => $item['route'] === 'mixes.index' ? ['route' => 'mixes.public'] + $item : $item, $navItems);
             }
 
             if (auth()->user()?->is_admin) {

@@ -903,4 +903,265 @@ class MixTest extends TestCase
         $this->post(route('mixes.store'), $this->payload())->assertRedirect(route('login'));
         $this->assertSame(0, Mix::count());
     }
+
+    /**
+     * Spec 007: mezcla de otro usuario, pública por defecto.
+     *
+     * @param  array<int, int>  $ratiosByFlavor  id del sabor => porcentaje
+     */
+    private function foreignMix(string $name, array $ratiosByFlavor = [], array $attributes = []): Mix
+    {
+        $mix = Mix::factory()->create(array_merge(['name' => $name, 'is_public' => true], $attributes));
+
+        foreach ($ratiosByFlavor ?: [$this->first->id => 100] as $flavorId => $ratio) {
+            MixItem::create(['mix_id' => $mix->id, 'flavor_id' => $flavorId, 'ratio' => $ratio]);
+        }
+
+        return $mix;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function publicNames(array $query = []): array
+    {
+        return $this->get(route('mixes.public', $query))
+            ->assertOk()
+            ->viewData('mixes')
+            ->pluck('name')
+            ->all();
+    }
+
+    // Spec 007, RF1 y RF2: sin sesión se ven las públicas de todos; nunca las privadas ni las que llevan un sabor oculto.
+    public function test_a_guest_sees_public_mixes_with_only_public_flavors(): void
+    {
+        $hidden = Flavor::factory()->notPublic()->create(['name' => 'Sabor oculto']);
+
+        $this->foreignMix('Pública de otro');
+        $this->savedMix([], ['name' => 'Pública mía']);
+        $this->foreignMix('Privada de otro', [], ['is_public' => false]);
+        $this->foreignMix('Con sabor oculto', [$this->first->id => 50, $hidden->id => 50]);
+
+        auth()->logout();
+
+        $this->assertEqualsCanonicalizing(['Pública de otro', 'Pública mía'], $this->publicNames());
+        $this->assertGuest();
+    }
+
+    // Spec 007, RF2: con sesión no salen las propias.
+    public function test_with_a_session_own_mixes_are_not_listed(): void
+    {
+        $this->foreignMix('Pública de otro');
+        $this->savedMix([], ['name' => 'Pública mía']);
+
+        $this->assertSame(['Pública de otro'], $this->publicNames());
+    }
+
+    // Spec 007, RF4: nombre de la mezcla sin mayúsculas ni acentos.
+    public function test_it_filters_by_mix_name_ignoring_case_and_accents(): void
+    {
+        $this->foreignMix('Noche Árabe');
+        $this->foreignMix('Fresca de verano');
+
+        $this->assertSame(['Noche Árabe'], $this->publicNames(['name' => 'ARABE']));
+        $this->assertSame(['Fresca de verano'], $this->publicNames(['name' => 'Verano']));
+    }
+
+    // Spec 007, RF4: sabor que contiene, por nombre del sabor.
+    public function test_it_filters_by_a_flavor_the_mix_contains(): void
+    {
+        $this->foreignMix('Con arándano', [$this->first->id => 100]);
+        $this->foreignMix('Con menta', [$this->second->id => 100]);
+
+        $this->assertSame(['Con arándano'], $this->publicNames(['flavor' => 'ARANDANO']));
+    }
+
+    // Spec 007, RF4: categoría que contiene y combinación de filtros.
+    public function test_it_filters_by_category_and_combines_the_filters(): void
+    {
+        $citrus = \App\Models\Category::factory()->create(['name' => 'Cítrico']);
+        $lemon = Flavor::factory()->create(['name' => 'Limón', 'category_id' => $citrus->id]);
+
+        $this->foreignMix('Limonada', [$lemon->id => 50, $this->first->id => 50]);
+        $this->foreignMix('Limón solo', [$lemon->id => 100]);
+        $this->foreignMix('Sin cítrico', [$this->second->id => 100]);
+
+        $this->assertEqualsCanonicalizing(['Limonada', 'Limón solo'], $this->publicNames(['category_id' => $citrus->id]));
+        $this->assertSame(['Limonada'], $this->publicNames(['category_id' => $citrus->id, 'flavor' => 'arandano']));
+        $this->assertSame([], $this->publicNames(['category_id' => $citrus->id, 'name' => 'sin']));
+    }
+
+    // Spec 007, RF5: los tres órdenes; por defecto, las más recientes.
+    public function test_public_mixes_can_be_sorted(): void
+    {
+        $this->foreignMix('Beta', [], ['created_at' => now()->subDays(1)]);
+        $this->foreignMix('alfa', [], ['created_at' => now()->subDays(2)]);
+        $this->foreignMix('Gamma', [], ['created_at' => now()]);
+
+        $this->assertSame(['Gamma', 'Beta', 'alfa'], $this->publicNames());
+        $this->assertSame(['Gamma', 'Beta', 'alfa'], $this->publicNames(['sort' => 'recent']));
+        $this->assertSame(['alfa', 'Beta', 'Gamma'], $this->publicNames(['sort' => 'name_asc']));
+        $this->assertSame(['Gamma', 'Beta', 'alfa'], $this->publicNames(['sort' => 'name_desc']));
+        $this->assertSame(['Gamma', 'Beta', 'alfa'], $this->publicNames(['sort' => 'id_asc']));
+
+        // Una mezcla sin fecha va al final en cualquier motor.
+        $undated = $this->foreignMix('Sin fecha');
+        Mix::whereKey($undated->id)->update(['created_at' => null]);
+
+        $this->assertSame(['Gamma', 'Beta', 'alfa', 'Sin fecha'], $this->publicNames());
+    }
+
+    // Spec 007, RF5: 12 por página, conservando filtros y orden.
+    public function test_public_mixes_are_paginated_keeping_filters_and_sort(): void
+    {
+        foreach (range(1, 13) as $number) {
+            $this->foreignMix(sprintf('Mezcla %02d', $number));
+        }
+
+        $query = ['name' => 'mezcla', 'sort' => 'name_asc'];
+        $mixes = $this->get(route('mixes.public', $query))->assertOk()->viewData('mixes');
+
+        $this->assertCount(12, $mixes);
+        $this->assertSame(13, $mixes->total());
+        $this->assertStringContainsString('name=mezcla', $mixes->nextPageUrl());
+        $this->assertStringContainsString('sort=name_asc', $mixes->nextPageUrl());
+        $this->assertSame(['Mezcla 13'], $this->publicNames($query + ['page' => 2]));
+    }
+
+    // Spec 007, RF6: ningún valor raro da error; un id de categoría no válido da 0 resultados.
+    public function test_odd_values_in_public_mixes_never_give_a_server_error(): void
+    {
+        $this->foreignMix('Pública');
+
+        $this->assertSame(['Pública'], $this->publicNames(['sort' => ['x']]));
+        $this->assertSame(['Pública'], $this->publicNames(['sort' => 'desconocido']));
+        $this->assertSame([], $this->publicNames(['category_id' => 'abc']));
+        $this->assertSame([], $this->publicNames(['category_id' => ['1']]));
+        $this->assertSame([], $this->publicNames(['name' => ['x']]));
+        $this->assertSame([], $this->publicNames(['flavor' => ['x']]));
+        $this->assertSame(['Pública'], $this->publicNames(['name' => '   ']));
+    }
+
+    // Spec 007, RF3: el autor se carga solo con id y nombre, nunca con el email.
+    public function test_the_author_is_loaded_without_the_email(): void
+    {
+        $this->foreignMix('Pública');
+
+        $mix = $this->get(route('mixes.public'))->assertOk()->viewData('mixes')->first();
+
+        $this->assertEqualsCanonicalizing(['id', 'name'], array_keys($mix->user->getAttributes()));
+    }
+
+    // Spec 007, RF1: con sesión hay dos pestañas y "Mis mezclas" es la activa en la lista propia.
+    public function test_with_a_session_mixes_has_two_tabs(): void
+    {
+        $mine = $this->get(route('mixes.index'))->assertOk();
+        $mine->assertSee('<a href="'.route('mixes.index').'" class="mixes-tab is-active" aria-current="page">Mis mezclas</a>', false);
+        $mine->assertSee('<a href="'.route('mixes.public').'" class="mixes-tab">Públicas</a>', false);
+
+        $public = $this->get(route('mixes.public'))->assertOk();
+        $public->assertSee('<a href="'.route('mixes.index').'" class="mixes-tab">Mis mezclas</a>', false);
+        $public->assertSee('<a href="'.route('mixes.public').'" class="mixes-tab is-active" aria-current="page">Públicas</a>', false);
+    }
+
+    // Spec 007, RF1: sin sesión no aparece la pestaña "Mis mezclas".
+    public function test_a_guest_only_has_the_public_tab(): void
+    {
+        auth()->logout();
+
+        $response = $this->get(route('mixes.public'))->assertOk();
+
+        $response->assertSee('class="mixes-tab is-active" aria-current="page">Públicas</a>', false);
+        $response->assertDontSee('href="'.route('mixes.index').'"', false);
+        $response->assertDontSee('>Mis mezclas</a>', false);
+    }
+
+    // Spec 007, RF3: la tarjeta y la ventana muestran el autor (sin email) y no tienen Editar, Eliminar ni la etiqueta de visibilidad.
+    public function test_public_mixes_show_the_author_and_no_owner_actions(): void
+    {
+        $author = User::factory()->create(['name' => 'Ana Autora', 'email' => 'ana.autora@example.com']);
+        $mix = $this->foreignMix('Pública de Ana', [], ['user_id' => $author->id, 'notes' => 'Con hielo']);
+
+        $response = $this->get(route('mixes.public'))->assertOk();
+
+        $this->assertSame(2, substr_count($response->getContent(), 'por Ana Autora'));
+        $response->assertSee('id="mixModal-'.$mix->id.'"', false);
+        $response->assertSee('Con hielo');
+        $response->assertDontSee('ana.autora@example.com');
+        $response->assertDontSee('href="'.route('mixes.edit', $mix).'"', false);
+        $response->assertDontSee('action="'.route('mixes.destroy', $mix).'"', false);
+        $response->assertDontSee('class="mix-visibility', false);
+    }
+
+    // Spec 007, RF4: el panel muestra cada filtro con su valor y lleva el orden; "Limpiar" conserva solo el orden.
+    public function test_the_public_filter_panel_shows_the_current_values_and_keeps_the_sort(): void
+    {
+        $citrus = \App\Models\Category::factory()->create(['name' => 'Cítrico']);
+
+        $response = $this->get(route('mixes.public', ['name' => 'noche', 'flavor' => 'menta', 'category_id' => $citrus->id, 'sort' => 'name_desc']))->assertOk();
+
+        $response->assertSee('name="name" id="name" class="form-control form-control-modern" value="noche"', false);
+        $response->assertSee('name="flavor" id="flavor" class="form-control form-control-modern" value="menta"', false);
+        $response->assertSee('<option value="'.$citrus->id.'" selected>', false);
+        $response->assertSee('<input type="hidden" name="sort" value="name_desc">', false);
+        $response->assertSee('href="'.route('mixes.public', ['sort' => 'name_desc']).'"', false);
+    }
+
+    // Spec 007, RF5: "Ordenar por" lista los tres órdenes y lleva los filtros activos.
+    public function test_the_public_sort_selector_carries_the_active_filters(): void
+    {
+        $response = $this->get(route('mixes.public', ['name' => 'noche', 'flavor' => '', 'sort' => 'name_asc']))->assertOk();
+
+        $content = $response->getContent();
+        $this->assertSame(1, preg_match('#<form method="GET" action="'.preg_quote(route('mixes.public'), '#').'" class="sort-form">(.*?)</form>#s', $content, $match));
+
+        $this->assertStringContainsString('<input type="hidden" name="name" value="noche">', $match[1]);
+        $this->assertStringNotContainsString('name="flavor"', $match[1]);
+        $this->assertStringContainsString('<option value="recent">Más recientes</option>', $match[1]);
+        $this->assertStringContainsString('<option value="name_asc" selected>Nombre (A-Z)</option>', $match[1]);
+        $this->assertStringContainsString('<option value="name_desc">Nombre (Z-A)</option>', $match[1]);
+    }
+
+    // Spec 007, RF4 y RF5: contador y paginación en la vista.
+    public function test_the_public_list_shows_the_count_and_the_pagination(): void
+    {
+        foreach (range(1, 13) as $number) {
+            $this->foreignMix(sprintf('Mezcla %02d', $number));
+        }
+
+        $response = $this->get(route('mixes.public', ['sort' => 'name_asc']))->assertOk();
+
+        $response->assertSee('13 mezclas');
+        $response->assertSee('href="'.e(route('mixes.public', ['sort' => 'name_asc', 'page' => 2])).'"', false);
+    }
+
+    // Spec 007, RF7: estados vacíos.
+    public function test_the_public_list_has_its_empty_states(): void
+    {
+        $this->get(route('mixes.public'))
+            ->assertOk()
+            ->assertSee('Todavía no hay mezclas públicas')
+            ->assertDontSee('No hay mezclas que coincidan');
+
+        $this->foreignMix('Pública');
+
+        $this->get(route('mixes.public', ['name' => 'nada', 'sort' => 'name_asc']))
+            ->assertOk()
+            ->assertSee('No hay mezclas que coincidan')
+            ->assertSee('href="'.route('mixes.public', ['sort' => 'name_asc']).'"', false)
+            ->assertDontSee('Todavía no hay mezclas públicas');
+    }
+
+    // Spec 007, RF1: "Mis mezclas" sigue igual, con Editar, Eliminar y la etiqueta de visibilidad.
+    public function test_my_mixes_keep_their_actions(): void
+    {
+        $mix = $this->savedMix();
+
+        $response = $this->get(route('mixes.index'))->assertOk();
+
+        $response->assertSee('href="'.route('mixes.edit', $mix).'"', false);
+        $response->assertSee('action="'.route('mixes.destroy', $mix).'"', false);
+        $response->assertSee('class="mix-visibility', false);
+        $response->assertDontSee('class="sort-form"', false);
+    }
 }

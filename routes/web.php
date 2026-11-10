@@ -38,6 +38,8 @@ Route::post('/logout', [AuthController::class, 'logout'])
 Route::get('/', [FlavorController::class, 'index'])->name('home');
 Route::get('/brands', [BrandController::class, 'index'])->name('brands.index');
 Route::get('/brands/{brand}', [BrandController::class, 'show'])->name('brands.show');
+// Mezclas públicas de otros usuarios (spec 007)
+Route::get('/mixes/public', [MixController::class, 'publicIndex'])->name('mixes.public');
 
 // Lo demás requiere iniciar sesión
 Route::middleware('auth')->group(function () {

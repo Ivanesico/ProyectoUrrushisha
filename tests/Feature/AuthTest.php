@@ -193,7 +193,7 @@ class AuthTest extends TestCase
         $technical = ['storage.local', 'storage.local.upload', 'up'];
 
         $this->assertEqualsCanonicalizing(
-            ['login', 'register', 'auth.login', 'auth.register', 'home', 'brands.index', 'brands.show'],
+            ['login', 'register', 'auth.login', 'auth.register', 'home', 'brands.index', 'brands.show', 'mixes.public'],
             array_values(array_diff($open, $technical))
         );
 

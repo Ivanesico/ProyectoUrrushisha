@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Mix;
 use App\Models\Flavor;
 use App\Models\MixItem;
+use App\Models\Category;
+use Illuminate\Http\Request;
 
 class MixController extends Controller {
 
@@ -17,7 +19,48 @@ class MixController extends Controller {
                 ->latest()
                 ->get();
 
-        return view('mixes.index', compact('mixes'));
+        return view('mixes.index', compact('mixes') + ['tab' => 'mine']);
+    }
+
+    // Órdenes de la lista pública; el primero es el de por defecto (spec 007).
+    private const PUBLIC_SORTS = [
+        'recent' => 'Más recientes',
+        'name_asc' => 'Nombre (A-Z)',
+        'name_desc' => 'Nombre (Z-A)',
+    ];
+
+    private const PUBLIC_FILTERS = ['name', 'flavor', 'category_id'];
+
+    /**
+     * Spec 007: mezclas públicas de otros usuarios, también sin sesión.
+     */
+    public function publicIndex(Request $request) {
+        // Lista blanca: un valor desconocido o un array usa el orden por defecto y no llega a la consulta.
+        $sort = $request->input('sort');
+        if (!is_string($sort) || !array_key_exists($sort, self::PUBLIC_SORTS)) {
+            $sort = 'recent';
+        }
+
+        // Autor solo con id y nombre: el email nunca se carga.
+        $mixes = Mix::with(['items.flavor.brand', 'user:id,name'])
+                ->publicListing($request->only(self::PUBLIC_FILTERS), auth()->id())
+                ->sortedForListing($sort)
+                ->paginate(12)
+                ->withQueryString();
+
+        $filters = [];
+
+        foreach (self::PUBLIC_FILTERS as $filter) {
+            $value = $request->input($filter);
+            $filters[$filter] = is_string($value) ? $value : '';
+        }
+
+        $categories = Category::orderBy('name')->get();
+
+        return view('mixes.index', compact('mixes', 'filters', 'sort', 'categories') + [
+            'tab' => 'public',
+            'sorts' => self::PUBLIC_SORTS,
+        ]);
     }
 
     public function create() {

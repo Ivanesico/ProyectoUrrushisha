@@ -211,9 +211,9 @@ class Flavor extends Model {
 
     /**
      * Expresión SQL en minúsculas y sin acentos. Sustituye también las mayúsculas acentuadas
-     * porque lower() no las trata igual en todos los motores.
+     * porque lower() no las trata igual en todos los motores. Pública para reutilizarla en las mezclas (spec 007).
      */
-    private static function normalizedExpression(string $expression): string {
+    public static function normalizedExpression(string $expression): string {
         foreach (self::SEARCH_REPLACEMENTS as $letter => $replacement) {
             $expression = "replace({$expression}, '{$letter}', '{$replacement}')";
         }

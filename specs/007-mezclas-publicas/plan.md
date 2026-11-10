@@ -1,0 +1,32 @@
+# Plan breve — 007: Ver mezclas públicas de otros usuarios (modo ligero) — Estado: aprobado (2026-11-10)
+
+- **Cambio**: (5) hoy Mezclas solo enseña las mezclas del usuario. Se añade la pestaña "Públicas" en Mezclas, con las mezclas públicas de otros usuarios, buscador, filtros, orden y paginación, visible también sin sesión (decidido en la spec 006). Guardar mezclas ajenas es el punto 12 y queda fuera.
+- **Archivos**: `routes/web.php`, `app/Http/Controllers/MixController.php` (`index` y un método nuevo `publicIndex`), `app/Models/Mix.php` (scope de la lista pública), `app/Models/Flavor.php` (`normalizedExpression` pasa a público para reutilizarlo), `resources/views/mixes/index.blade.php` (sirve para las dos pestañas), `resources/views/layouts/app.blade.php` (pestaña Mezclas del visitante), `tests/Feature/MixTest.php`, `tests/Feature/AuthTest.php` y `tests/Feature/CatalogTest.php`. Ningún archivo NUEVO; sin migraciones ni dependencias.
+- **RF1** (ruta y pestañas): nueva ruta `GET /mixes/public` (`mixes.public`), abierta con y sin sesión. Mezclas tiene arriba dos pestañas: "Mis mezclas" (`mixes.index`, la de siempre, sigue pidiendo sesión) y "Públicas" (`mixes.public`). Con sesión, "Mezclas" abre "Mis mezclas". Sin sesión, la pestaña "Mis mezclas" no aparece y la navegación del visitante pasa a ser Sabores, Mezclas (enlaza a `mixes.public`) y Marcas.
+- **RF2** (qué mezclas salen): solo mezclas con `is_public = true` en las que TODOS sus sabores son públicos (`flavors.is_public = true`). Con sesión, se excluyen las del propio usuario. Las privadas nunca salen, tampoco por URL.
+- **RF3** (tarjeta y detalle): cada mezcla se ve como en "Mis mezclas" (nombre, barra de porcentajes, sabores con su marca, notas y fecha) y se abre en el mismo modal, añadiendo "por <nombre del autor>" (`users.name`; nunca el email). Sin "Editar" ni "Eliminar" ni la etiqueta Pública/Privada.
+- **RF4** (buscador y filtros, se combinan con AND): Nombre de la mezcla (`name`), Sabor que contiene (`flavor`: alguno de sus sabores con nombre que coincida) y Categoría que contiene (`category_id`: algún sabor de esa categoría, con el desplegable de `partials/_filter-dropdown`). Los textos sin distinguir mayúsculas ni acentos, como el catálogo. Contador "N mezclas". Se aplican con "Aplicar filtros"; "Limpiar" los quita y mantiene el orden. En el móvil el panel es plegable, como en la portada.
+- **RF5** (orden y paginación): "Ordenar por:" en línea como en la portada, que se aplica al elegir y vuelve a la página 1: `recent` "Más recientes" (por defecto), `name_asc` "Nombre (A-Z)" y `name_desc` "Nombre (Z-A)". 12 por página con `withQueryString()`.
+- **RF6** (valores raros): `sort` por lista blanca (desconocido o array: `recent`). `category_id` no entero o textos como array: 0 resultados. Ningún valor raro da 500.
+- **RF7** (estados vacíos): sin mezclas públicas, "Todavía no hay mezclas públicas"; con filtros y sin resultados, "No hay mezclas que coincidan" y "Limpiar".
+- **RF8**: a 375 px sin scroll horizontal, con y sin sesión; tema oscuro coherente; consola sin errores.
+- **Fuera de alcance**: guardar o copiar mezclas ajenas (12); filtro por marca (descartado por el usuario); perfil o página del autor; avisar al autor.
+- **Decisiones**:
+  - Una sola vista (`mixes/index.blade.php`) con una variable `$tab` (`mine` o `public`), para compartir tarjetas, modal y estilos sin duplicarlos. Descartada una vista nueva, que repetiría el CSS de las tarjetas.
+  - `/mixes/public` no choca con `/mixes/{mix}`: el patrón de `mix` solo admite números.
+  - Filtros en un scope `Mix::publicListing(array $filters, ?int $excludeUserId)`: `where('is_public', true)`, `whereDoesntHave('items.flavor', is_public = false)`, `whereHas('items.flavor', ...)` para sabor (`Flavor::matchingText('name')`) y categoría (id validado con `filter_var`, como en el catálogo). Nombre de la mezcla con la misma normalización (`Flavor::normalizedExpression` sobre `mixes.name`) y `like`.
+  - Orden: `recent` = `created_at desc, id desc`; nombre = `lower` normalizado + `id` de desempate.
+  - Autor con `with('user:id,name')`, para no cargar el email.
+  - Checklist de Postgres: búsqueda normalizada en minúsculas (sin `like` sensible a mayúsculas), subconsultas con `whereHas`/`whereDoesntHave` estándar, ids validados antes de la consulta, sin SQL de MySQL ni migraciones.
+- **Tests existentes que cambian**:
+  - `AuthTest::test_only_login_registration_catalog_and_brands_are_open_to_guests`: añade `mixes.public`.
+  - `CatalogTest::test_a_guest_sees_the_access_buttons_and_only_flavors_and_brands`: el visitante también ve Mezclas (enlace a `mixes.public`); sigue sin ver `mixes.index` ni Favoritos.
+  - Los de `MixTest` que comprueban el título "Mis mezclas" o el marcado de la lista podrían necesitar ajustes menores por las pestañas.
+- [x] **T1**, RF1, RF2, RF4, RF5 y RF6 (servidor):
+  - Primero, los tests en rojo en `MixTest`: la ruta abierta; solo salen públicas con todos sus sabores públicos; con sesión se excluyen las propias y sin sesión salen todas; cada filtro y su combinación (sin mayúsculas ni acentos); los tres órdenes; 13 mezclas en 2 páginas conservando filtros y orden; valores raros y arrays sin 500; el autor se carga sin email; `mixes.index` sigue pidiendo sesión.
+  - Después, la ruta, el scope en `Mix`, `normalizedExpression` público y `publicIndex`.
+  - Hecho cuando: `php artisan test` está en verde.
+- [x] **T2**, RF1, RF3, RF4, RF5, RF7 y RF8 (vistas):
+  - Primero, los tests en rojo: pestañas (con y sin sesión), "por <autor>" sin email, sin Editar/Eliminar en públicas, panel de filtros con sus valores, "Ordenar por" con los filtros activos, "Limpiar" conserva el orden, estados vacíos y navegación del visitante con Mezclas.
+  - Después, `mixes/index.blade.php` y `layouts/app.blade.php`.
+  - Hecho cuando: los tests están en verde y, a 375 px, con y sin sesión, se filtra, ordena, pagina y abre el modal sin scroll horizontal ni errores en consola.

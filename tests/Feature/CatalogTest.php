@@ -1132,6 +1132,9 @@ class CatalogTest extends TestCase
             $response->assertSee('href="'.route('register').'" class="btn us-access us-access-register">Registrarse</a>', false);
             $response->assertSee('href="'.route('home').'" class="us-tab', false);
             $response->assertSee('href="'.route('brands.index').'" class="us-tab', false);
+            // Spec 007: el visitante también ve Mezclas, que lleva a las públicas.
+            $response->assertSee('href="'.route('mixes.public').'" class="us-tab', false);
+            $response->assertSee('href="'.route('mixes.public').'" class="us-link', false);
             $response->assertSee('href="'.route('brands.index').'" class="us-link', false);
 
             foreach (['favorites.index', 'mixes.index', 'admin.index'] as $hidden) {
