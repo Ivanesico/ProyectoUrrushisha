@@ -68,7 +68,7 @@ class FlavorController extends Controller {
             $sort = 'recent';
         }
 
-        $flavors = $query->sortedBy($sort)->paginate(12)->withQueryString();
+        $flavors = $query->sortedBy($sort)->paginate(12)->withQueryString()->fragment('catalogo');
 
         // Al ordenar por marca o categoría, los sabores de la página se agrupan bajo su título; si no, un solo grupo sin título.
         $flavorGroups = $flavors->getCollection()->groupBy(fn (Flavor $flavor) => match ($sort) {

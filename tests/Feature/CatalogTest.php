@@ -288,7 +288,7 @@ class CatalogTest extends TestCase
         $content = $this->catalog(['sort' => 'brand'])->getContent();
         $form = $this->sortForm($content);
 
-        $this->assertStringContainsString('action="'.route('home').'"', $form);
+        $this->assertStringContainsString('action="'.route('home').'#catalogo"', $form);
         $this->assertStringContainsString('method="GET"', $form);
         $this->assertMatchesRegularExpression('/<label for="sort"[^>]*>\s*Ordenar por:\s*<\/label>/', $form);
         $this->assertMatchesRegularExpression('/<select name="sort" id="sort"[^>]*onchange="this\.form\.submit\(\)"[^>]*data-filter-dropdown/', $form);
@@ -361,6 +361,57 @@ class CatalogTest extends TestCase
         $secondPage = $this->catalog(['name' => 'menta', 'sort' => 'name_desc', 'page' => 2]);
         $this->assertSame(['Menta 01'], $this->names($secondPage));
         $secondPage->assertSee('?name=menta&sort=name_desc&page=1');
+    }
+
+    // Spec 004, RF8: al ordenar o paginar, la página recargada queda en el título del listado.
+    public function test_the_catalog_heading_has_the_catalogo_anchor(): void
+    {
+        Flavor::factory()->create();
+        $this->assertMatchesRegularExpression('#<section id="catalogo" class="catalog-heading[^"]*"#', $this->catalog()->getContent());
+    }
+
+    public function test_the_catalogo_anchor_exists_without_results(): void
+    {
+        $response = $this->catalog(['name' => 'no-existe']);
+
+        $this->assertSame(0, $response->viewData('flavors')->total());
+        $this->assertSame(1, substr_count($response->getContent(), 'id="catalogo"'));
+    }
+
+    public function test_the_sort_form_goes_to_the_catalogo_anchor(): void
+    {
+        $form = $this->sortForm($this->catalog(['name' => 'menta'])->getContent());
+
+        $this->assertMatchesRegularExpression('#^<form[^>]*action="'.preg_quote(route('home'), '#').'\#catalogo"#', $form);
+    }
+
+    public function test_the_filters_form_does_not_go_to_the_catalogo_anchor(): void
+    {
+        $form = $this->filtersForm($this->catalog(['sort' => 'name_desc'])->getContent());
+
+        $this->assertMatchesRegularExpression('#^<form[^>]*action="'.preg_quote(route('home'), '#').'"#', $form);
+        $this->assertStringNotContainsString('#catalogo', $form);
+    }
+
+    public function test_the_pagination_links_go_to_the_catalogo_anchor_keeping_the_sort_and_the_filters(): void
+    {
+        foreach (range(1, 25) as $number) {
+            Flavor::factory()->create(['name' => sprintf('Menta %02d', $number), 'tobacco_type' => 'negro']);
+        }
+
+        $secondPage = $this->catalog(['name' => 'menta', 'tobacco_type' => 'negro', 'sort' => 'name_desc', 'page' => 2]);
+        $content = $secondPage->getContent();
+
+        foreach ([1, 3] as $page) {
+            $this->assertStringContainsString('?name=menta&amp;tobacco_type=negro&amp;sort=name_desc&amp;page='.$page.'#catalogo"', $content);
+        }
+
+        // Todos los enlaces de la paginación llevan el ancla.
+        preg_match_all('#href="([^"]*[?&](?:amp;)?page=\d+[^"]*)"#', $content, $links);
+        $this->assertNotEmpty($links[1]);
+        foreach ($links[1] as $link) {
+            $this->assertStringEndsWith('#catalogo', $link);
+        }
     }
 
     public function test_clear_removes_the_filters_but_keeps_the_sort(): void

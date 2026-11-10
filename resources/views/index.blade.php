@@ -116,7 +116,7 @@
         </div>
     </section>
 
-    <section class="catalog-heading mb-3 d-flex flex-wrap justify-content-between align-items-end gap-3">
+    <section id="catalogo" class="catalog-heading mb-3 d-flex flex-wrap justify-content-between align-items-end gap-3">
         <div>
             <h2 class="section-title mb-1">Sabores disponibles</h2>
             <p class="section-subtitle mb-0">
@@ -125,7 +125,7 @@
         </div>
 
         {{-- Al elegir un orden se envía al momento, con la búsqueda y los filtros activos y sin page (vuelve a la página 1) --}}
-        <form method="GET" action="{{ route('home') }}" class="sort-form">
+        <form method="GET" action="{{ route('home') }}#catalogo" class="sort-form">
             @foreach($filters as $filter => $value)
             @if($value !== '')
             <input type="hidden" name="{{ $filter }}" value="{{ $value }}">
@@ -402,6 +402,8 @@
     .catalog-heading {
         position: relative;
         z-index: 25;
+        /* Al llegar por #catalogo (orden o paginación), la barra superior fija no tapa el título. */
+        scroll-margin-top: 5.5rem;
     }
 
     /* Si la lista se abre hacia arriba, queda también por encima del panel de filtros (z-index 30). */
