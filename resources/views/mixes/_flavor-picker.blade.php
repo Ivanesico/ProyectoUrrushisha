@@ -1,25 +1,23 @@
 {{--
-    Filas de sabor y porcentaje de los formularios de mezcla, con buscador de favoritos.
+    Filas de sabor y porcentaje de los formularios de mezcla, con buscador en el catálogo (spec 009).
     El <select> sigue siendo el campo que se envía. El buscador lo sustituye con JavaScript;
-    sin JavaScript, el formulario funciona igual con el desplegable.
-    Variables: $flavors, $rows.
+    sin JavaScript, el formulario funciona igual con el desplegable, agrupado en favoritos y resto.
+    Variables: $flavorGroups (grupos con label, favorite y flavors), $rows.
 --}}
-@if($flavors->isEmpty())
-<p class="mix-no-favorites">
-    Todavía no tienes favoritos. <a href="{{ route('home') }}">Guarda sabores desde el catálogo</a> para añadirlos a tu mezcla.
-</p>
-@endif
-
 <div id="flavor-list">
     @foreach($rows as $row)
     <div class="mix-row flavor-row">
         <div class="mix-row-flavor">
             <select name="flavors[]" class="form-select" aria-label="Sabor" required>
                 <option value="">Selecciona sabor</option>
-                @foreach($flavors as $flavor)
-                <option value="{{ $flavor->id }}" @selected($row['flavor_id'] == $flavor->id) data-name="{{ $flavor->name }}" data-brand="{{ $flavor->brand->name ?? '' }}" data-image="{{ $flavor->image_url ? asset('storage/' . $flavor->image_url) : '' }}">
-                    {{ $flavor->name }} ({{ $flavor->brand->name ?? '-' }})
-                </option>
+                @foreach($flavorGroups as $group)
+                <optgroup label="{{ $group['label'] }}">
+                    @foreach($group['flavors'] as $flavor)
+                    <option value="{{ $flavor->id }}" @selected($row['flavor_id'] == $flavor->id) data-name="{{ $flavor->name }}" data-brand="{{ $flavor->brand->name ?? '' }}" data-image="{{ $flavor->image_url ? asset('storage/' . $flavor->image_url) : '' }}"@if($group['favorite']) data-favorite="1"@endif>
+                        {{ $flavor->name }} ({{ $flavor->brand->name ?? '-' }})
+                    </option>
+                    @endforeach
+                </optgroup>
                 @endforeach
             </select>
         </div>
@@ -46,10 +44,14 @@
         <div class="mix-row-flavor">
             <select name="flavors[]" class="form-select" aria-label="Sabor" required>
                 <option value="">Selecciona sabor</option>
-                @foreach($flavors as $flavor)
-                <option value="{{ $flavor->id }}" data-name="{{ $flavor->name }}" data-brand="{{ $flavor->brand->name ?? '' }}" data-image="{{ $flavor->image_url ? asset('storage/' . $flavor->image_url) : '' }}">
-                    {{ $flavor->name }} ({{ $flavor->brand->name ?? '-' }})
-                </option>
+                @foreach($flavorGroups as $group)
+                <optgroup label="{{ $group['label'] }}">
+                    @foreach($group['flavors'] as $flavor)
+                    <option value="{{ $flavor->id }}" data-name="{{ $flavor->name }}" data-brand="{{ $flavor->brand->name ?? '' }}" data-image="{{ $flavor->image_url ? asset('storage/' . $flavor->image_url) : '' }}"@if($group['favorite']) data-favorite="1"@endif>
+                        {{ $flavor->name }} ({{ $flavor->brand->name ?? '-' }})
+                    </option>
+                    @endforeach
+                </optgroup>
                 @endforeach
             </select>
         </div>
@@ -128,15 +130,10 @@
         color: var(--us-text-strong);
     }
 
-    .mix-no-favorites {
-        padding: 0.8rem 1rem;
-        border-radius: 14px;
-        background: rgba(139, 92, 246, 0.16);
-        color: var(--us-text-strong);
-    }
-
-    .mix-no-favorites a {
-        color: #f9a8d4;
+    /* Spec 009: marca de favorito en el buscador */
+    .mix-combo-favorite {
+        color: #f472b6;
+        font-size: 0.85em;
     }
 
     .mix-row {
@@ -380,10 +377,10 @@
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'form-control mix-combo-input';
-        input.placeholder = 'Escribe el nombre de un favorito';
+        input.placeholder = 'Escribe el nombre de un sabor';
         input.autocomplete = 'off';
         input.setAttribute('role', 'combobox');
-        input.setAttribute('aria-label', 'Buscar sabor en tus favoritos');
+        input.setAttribute('aria-label', 'Buscar sabor en el catálogo');
         input.setAttribute('aria-autocomplete', 'list');
         input.setAttribute('aria-expanded', 'false');
         input.setAttribute('aria-controls', comboId);
@@ -447,9 +444,7 @@
             if (shown.length === 0) {
                 const empty = document.createElement('li');
                 empty.className = 'mix-combo-empty';
-                empty.textContent = options.length === 0
-                    ? 'Todavía no tienes favoritos.'
-                    : 'Ningún favorito disponible coincide con la búsqueda.';
+                empty.textContent = 'Ningún sabor disponible coincide con la búsqueda.';
                 results.append(empty);
             }
 
@@ -465,6 +460,21 @@
                 const name = document.createElement('span');
                 name.className = 'mix-combo-name';
                 name.textContent = option.dataset.name;
+
+                // Spec 009: los favoritos salen primero y llevan un ♥.
+                if (option.dataset.favorite) {
+                    const heart = document.createElement('span');
+                    heart.className = 'mix-combo-favorite';
+                    heart.setAttribute('aria-hidden', 'true');
+                    heart.textContent = '♥';
+
+                    const label = document.createElement('span');
+                    label.className = 'visually-hidden';
+                    label.textContent = ' (favorito)';
+
+                    name.append(' ', heart, label);
+                }
+
                 text.append(name);
 
                 if (option.dataset.brand) {

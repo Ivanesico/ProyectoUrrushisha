@@ -5,7 +5,7 @@
 @section('content')
 <div class="container py-4">
     <h1 class="mix-form-title">Crear mezcla</h1>
-    <p class="mix-form-subtitle">Elige sabores de tus favoritos y reparte los porcentajes.</p>
+    <p class="mix-form-subtitle">Elige sabores del catálogo y reparte los porcentajes.</p>
 
     @if($errors->any())
     <div class="alert alert-danger rounded-4">

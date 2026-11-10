@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Favorite;
+use App\Models\Flavor;
 use App\Models\Mix;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
@@ -54,27 +54,31 @@ class StoreMixRequest extends FormRequest {
                     $validator->errors()->add('ratios', 'La suma de los porcentajes debe ser exactamente 100%.');
                 }
 
-                if (array_diff(array_map('intval', $flavors), $this->allowedFlavorIds())) {
-                    $validator->errors()->add('flavors', 'Solo puedes añadir sabores de tus favoritos.');
+                $flavorIds = array_map('intval', $flavors);
+
+                if (array_diff($flavorIds, $this->allowedFlavorIds($flavorIds))) {
+                    $validator->errors()->add('flavors', 'Solo puedes añadir sabores del catálogo.');
                 }
             },
         ];
     }
 
     /**
-     * Los favoritos del usuario y, al editar, los sabores guardados en la mezcla.
+     * Spec 009: de los sabores enviados, los públicos y, al editar, los que ya estaban en la mezcla
+     * (aunque hayan dejado de ser públicos). Ya no depende de los favoritos.
      *
+     * @param  array<int, int>  $flavorIds
      * @return array<int, int>
      */
-    private function allowedFlavorIds(): array {
-        $flavorIds = Favorite::where('user_id', $this->user()->id)->pluck('flavor_id');
+    private function allowedFlavorIds(array $flavorIds): array {
+        $allowed = Flavor::whereIn('id', $flavorIds)->where('is_public', true)->pluck('id');
 
         $mix = $this->route('mix');
         if ($mix instanceof Mix) {
-            $flavorIds = $flavorIds->merge($mix->items()->pluck('flavor_id'));
+            $allowed = $allowed->merge($mix->items()->pluck('flavor_id'));
         }
 
-        return $flavorIds->map(fn ($id) => (int) $id)->all();
+        return $allowed->map(fn ($id) => (int) $id)->all();
     }
 
     public function messages(): array {

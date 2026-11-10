@@ -1,0 +1,31 @@
+# Plan breve — 009: Mezclas con cualquier sabor del catálogo (modo ligero) — Estado: aprobado (2026-11-10)
+
+- **Cambio**: (1) hoy una mezcla solo puede llevar sabores de los favoritos del usuario (más, al editar, los que ya estaban en la mezcla). Pasa a admitir cualquier sabor público del catálogo. Favoritos y mezclas quedan independientes: usar un sabor en una mezcla NO lo añade a favoritos. Guardar una mezcla pública (spec 008) sigue añadiendo sus sabores a favoritos, sin cambios. Cambia la regla de Mezclas de `CLAUDE.md`.
+- **Archivos**: `app/Http/Requests/StoreMixRequest.php` (sabores permitidos y mensaje), `app/Http/Controllers/MixController.php` (`create` y `edit`: sabores que ofrece el formulario), `resources/views/mixes/_flavor-picker.blade.php` (orden, marca de favorito, textos), `resources/views/mixes/create.blade.php` (subtítulo), `tests/Feature/MixTest.php` y, en el cierre, `CLAUDE.md`. Ningún archivo NUEVO; sin migraciones ni dependencias.
+- **RF1** (sabores permitidos al guardar): al crear y editar, cada sabor debe ser público (`flavors.is_public = true`). Al editar, además, se admiten los sabores que ya estaban en la mezcla aunque hayan dejado de ser públicos (como hoy con los que dejaron de ser favoritos). Un sabor no público nuevo se rechaza con "Solo puedes añadir sabores del catálogo." Siguen igual el resto de reglas: entre 1 y 100, suma 100, sin repetir.
+- **RF2** (qué ofrece el formulario): todos los sabores públicos y, al editar, los ya presentes en la mezcla. Primero los favoritos del usuario y después el resto, cada grupo por nombre. Sin JavaScript, el `<select>` los muestra en dos grupos (`<optgroup>` "Tus favoritos" y "Resto del catálogo"; el primero no aparece si no hay favoritos).
+- **RF3** (buscador): el buscador actual busca en todo lo que ofrece el formulario (nombre y marca, sin mayúsculas ni acentos, como hoy), mantiene ese orden (favoritos primero) y marca cada favorito con un ♥ (con texto accesible "Favorito"). Textos: placeholder "Escribe el nombre de un sabor", `aria-label` "Buscar sabor en el catálogo", sin resultados "Ningún sabor disponible coincide con la búsqueda."
+- **RF4** (textos): desaparece el aviso "Todavía no tienes favoritos…" del formulario, y el subtítulo de crear pasa a "Elige sabores del catálogo y reparte los porcentajes."
+- **RF5**: a 375 px, el buscador con la lista abierta no provoca scroll horizontal; consola sin errores.
+- **Fuera de alcance**: añadir automáticamente a favoritos; cambiar lo que hace guardar una mezcla pública (spec 008); filtros por marca o categoría dentro del buscador; paginar o limitar la lista del buscador.
+- **Decisiones**:
+  - La lista de sabores se ordena en PHP (favoritos primero) después de la consulta, sin SQL de ordenación propio: así no hay diferencias entre motores.
+  - Con unos 360 sabores públicos, cada fila del formulario repite sus opciones (como hoy con los favoritos); es aceptable para un formulario de pocas filas. Si en el futuro hay muchos más, se valoraría cargar la lista una sola vez.
+  - Checklist de Postgres: `where('is_public', true)` y `whereIn` estándar; sin `like` nuevo, sin migraciones, sin SQL de MySQL.
+  - `CLAUDE.md` (en el cierre): la regla "Solo se pueden añadir sabores que el usuario tenga en favoritos" pasa a "Solo se pueden añadir sabores públicos del catálogo (al editar, los que ya estaban en la mezcla pueden quedarse)".
+- **Tests existentes que cambian** (en `MixTest`):
+  - El caso de datos 'sabor fuera de favoritos' de las mezclas no válidas pasa a 'sabor no público', con el mensaje nuevo.
+  - `test_editing_rejects_a_new_flavor_outside_favorites_even_with_a_valid_sum` y `test_a_favorite_of_another_user_cannot_be_used` pasan a comprobar que un sabor público fuera de favoritos SÍ se admite y que uno no público se rechaza.
+  - `test_a_hidden_flavor_in_favorites_is_not_blocked_when_creating` pasa a lo contrario: un no público en favoritos se rechaza al crear.
+  - `test_the_edit_form_does_not_offer_flavors_outside_favorites_or_the_mix` pasa a: no ofrece sabores no públicos que no estén en la mezcla.
+  - `test_a_present_flavor_can_be_replaced_and_then_stops_being_present` y `test_a_rejected_edit_still_offers_the_present_flavor_removed_from_its_row` usan un sabor no público en lugar de uno fuera de favoritos.
+  - `test_the_create_form_explains_how_to_get_flavors_when_there_are_no_favorites` se sustituye por: sin favoritos, el formulario ofrece igualmente el catálogo.
+  - El resto de tests con `notFavorite` siguen valiendo (es un sabor público).
+- [x] **T1**, RF1 (servidor):
+  - Primero, los tests en rojo: crear y editar con un sabor público fuera de favoritos funciona y no lo añade a favoritos; un no público se rechaza al crear y al añadirlo al editar (aunque esté en favoritos), con el mensaje nuevo y sin cambios en la base de datos; uno no público ya presente puede quedarse; los tests existentes de arriba, ajustados.
+  - Después, `StoreMixRequest`.
+  - Hecho cuando: `php artisan test` está en verde.
+- [x] **T2**, RF2, RF3, RF4 y RF5 (formulario):
+  - Primero, los tests en rojo: crear ofrece todos los públicos y no los no públicos; editar añade los presentes; favoritos primero en `<optgroup>` "Tus favoritos" y luego "Resto del catálogo" (sin el primero si no hay favoritos); cada favorito lleva `data-favorite`; sin el aviso de "Todavía no tienes favoritos"; subtítulo nuevo.
+  - Después, `create`/`edit` en `MixController`, `_flavor-picker.blade.php` y `create.blade.php`.
+  - Hecho cuando: los tests están en verde y, a 375 px, se busca un sabor que no es favorito, se elige, la mezcla se guarda y los favoritos salen primero con ♥, sin scroll horizontal ni errores en consola.

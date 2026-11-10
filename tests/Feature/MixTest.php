@@ -219,7 +219,8 @@ class MixTest extends TestCase
             'más sabores que porcentajes' => [fn ($t) => ['ratios' => [100]], $position],
             'más porcentajes que sabores' => [fn ($t) => ['ratios' => [50, 30, 20]], $position],
             'sabor y porcentaje en posiciones distintas' => [fn ($t) => ['flavors' => [0 => $t->first->id], 'ratios' => [5 => 100]], $position],
-            'sabor fuera de favoritos' => [fn ($t) => ['flavors' => [$t->first->id, $t->notFavorite->id]], 'Solo puedes añadir sabores de tus favoritos.'],
+            // Spec 009: el límite ya no son los favoritos, sino los sabores públicos del catálogo.
+            'sabor no público' => [fn ($t) => ['flavors' => [$t->first->id, Flavor::factory()->notPublic()->create()->id]], 'Solo puedes añadir sabores del catálogo.'],
 
             'fila sin sabor' => [fn ($t) => ['flavors' => [null], 'ratios' => [100]], 'Selecciona un sabor en cada fila.'],
             'id de sabor con texto' => [fn ($t) => ['flavors' => ['abc'], 'ratios' => [100]], $invalidFlavor],
@@ -327,47 +328,63 @@ class MixTest extends TestCase
         $this->assertEquals([$this->first->id => 70, $third->id => 30], $this->savedRatios($mix));
     }
 
-    // RF-26: un sabor añadido que no está en favoritos ni en la mezcla se rechaza
-    public function test_editing_rejects_a_new_flavor_outside_favorites_even_with_a_valid_sum(): void
+    // Spec 009, RF1: al editar se puede añadir un sabor público que no está en favoritos, y no pasa a favoritos.
+    public function test_editing_can_add_a_public_flavor_outside_favorites(): void
     {
         $mix = $this->savedMix();
-        $before = $this->snapshot($mix);
 
         $response = $this->submitEdit($mix, $this->payload([
             'flavors' => [$this->first->id, $this->second->id, $this->notFavorite->id],
             'ratios' => [50, 25, 25],
         ]));
 
-        $response->assertSee('Solo puedes añadir sabores de tus favoritos.');
+        $response->assertSee('Mezcla actualizada correctamente.');
+        $this->assertEquals([$this->first->id => 50, $this->second->id => 25, $this->notFavorite->id => 25], $this->savedRatios($mix));
+        $this->assertFalse(Favorite::where('user_id', $this->user->id)->where('flavor_id', $this->notFavorite->id)->exists());
+    }
+
+    // Spec 009, RF1: al editar, un sabor no público nuevo se rechaza aunque esté en favoritos.
+    public function test_editing_rejects_a_new_hidden_flavor_even_in_favorites(): void
+    {
+        $hidden = Flavor::factory()->notPublic()->create();
+        $this->addFavorite($hidden);
+        $mix = $this->savedMix();
+        $before = $this->snapshot($mix);
+
+        $response = $this->submitEdit($mix, $this->payload([
+            'flavors' => [$this->first->id, $hidden->id],
+            'ratios' => [50, 50],
+        ]));
+
+        $response->assertSee('Solo puedes añadir sabores del catálogo.');
         $this->assertSame($before, $this->snapshot($mix));
     }
 
-    // RF-24: favorito de otro usuario, no vale
-    public function test_a_favorite_of_another_user_cannot_be_used(): void
+    // Spec 009, RF1: al crear vale cualquier sabor público, sin tenerlo en favoritos y sin añadirlo a ellos.
+    public function test_creating_with_a_public_flavor_outside_favorites_does_not_add_it_to_favorites(): void
     {
-        Favorite::create(['user_id' => User::factory()->create()->id, 'flavor_id' => $this->notFavorite->id]);
+        $favoritesBefore = Favorite::where('user_id', $this->user->id)->pluck('flavor_id')->sort()->values()->all();
 
         $response = $this->submitCreate($this->payload([
             'flavors' => [$this->notFavorite->id],
             'ratios' => [100],
         ]));
 
-        $response->assertSee('Solo puedes añadir sabores de tus favoritos.');
-        $this->assertSame(0, Mix::count());
+        $response->assertSee('Mezcla creada correctamente.');
+        $this->assertEquals([$this->notFavorite->id => 100], $this->savedRatios(Mix::sole()));
+        $this->assertSame($favoritesBefore, Favorite::where('user_id', $this->user->id)->pluck('flavor_id')->sort()->values()->all());
     }
 
-    // RF-25
-    public function test_a_hidden_flavor_in_favorites_is_not_blocked_when_creating(): void
+    // Spec 009, RF1: un sabor no público se rechaza al crear aunque esté en favoritos.
+    public function test_a_hidden_flavor_in_favorites_is_rejected_when_creating(): void
     {
         $hidden = Flavor::factory()->notPublic()->create();
         $this->addFavorite($hidden);
 
-        $this->get(route('mixes.create'))->assertSee('<option value="'.$hidden->id.'"', false);
-
         $response = $this->submitCreate($this->payload(['flavors' => [$hidden->id], 'ratios' => [100]]));
 
-        $response->assertSee('Mezcla creada correctamente.');
-        $this->assertEquals([$hidden->id => 100], $this->savedRatios(Mix::sole()));
+        $response->assertSee('Solo puedes añadir sabores del catálogo.');
+        $this->assertSame(0, Mix::count());
     }
 
     public function test_a_hidden_flavor_already_present_and_outside_favorites_can_stay(): void
@@ -400,13 +417,16 @@ class MixTest extends TestCase
         $this->assertStringContainsString('<option value="'.$this->second->id.'"', $this->newRowTemplate($html));
     }
 
-    public function test_the_edit_form_does_not_offer_flavors_outside_favorites_or_the_mix(): void
+    // Spec 009: el formulario de editar no ofrece sabores no públicos que no estén en la mezcla.
+    public function test_the_edit_form_does_not_offer_hidden_flavors_outside_the_mix(): void
     {
+        $hidden = Flavor::factory()->notPublic()->create();
+        $this->addFavorite($hidden);
         $mix = $this->savedMix();
 
         $html = $this->get(route('mixes.edit', $mix))->getContent();
 
-        $this->assertStringNotContainsString('<option value="'.$this->notFavorite->id.'"', $html);
+        $this->assertStringNotContainsString('<option value="'.$hidden->id.'"', $html);
     }
 
     public function test_a_present_flavor_outside_favorites_can_be_saved(): void
@@ -422,9 +442,11 @@ class MixTest extends TestCase
         $this->assertEquals([$this->notFavorite->id => 60, $this->first->id => 40], $this->savedRatios($mix));
     }
 
+    // Spec 009: el sabor "presente" es ahora uno no público (los públicos ya se admiten siempre).
     public function test_a_rejected_edit_still_offers_the_present_flavor_removed_from_its_row(): void
     {
-        $mix = $this->savedMix([$this->notFavorite->id => 60, $this->first->id => 40]);
+        $hidden = Flavor::factory()->notPublic()->create();
+        $mix = $this->savedMix([$hidden->id => 60, $this->first->id => 40]);
 
         $response = $this->submitEdit($mix, $this->payload([
             'flavors' => [$this->first->id],
@@ -434,19 +456,21 @@ class MixTest extends TestCase
         $response->assertSee('La suma de los porcentajes debe ser exactamente 100%.');
         $html = $response->getContent();
         $this->assertSame([[$this->first->id, '99']], $this->formRows($html));
-        $this->assertStringContainsString('<option value="'.$this->notFavorite->id.'"', $this->newRowTemplate($html));
+        $this->assertStringContainsString('<option value="'.$hidden->id.'"', $this->newRowTemplate($html));
 
         $response = $this->submitEdit($mix, $this->payload([
-            'flavors' => [$this->first->id, $this->notFavorite->id],
+            'flavors' => [$this->first->id, $hidden->id],
             'ratios' => [50, 50],
         ]));
 
         $response->assertSee('Mezcla actualizada correctamente.');
     }
 
+    // Spec 009: un sabor no público que se quita de la mezcla ya no se puede volver a añadir.
     public function test_a_present_flavor_can_be_replaced_and_then_stops_being_present(): void
     {
-        $mix = $this->savedMix([$this->notFavorite->id => 60, $this->first->id => 40]);
+        $hidden = Flavor::factory()->notPublic()->create();
+        $mix = $this->savedMix([$hidden->id => 60, $this->first->id => 40]);
 
         $this->submitEdit($mix, $this->payload([
             'flavors' => [$this->second->id, $this->first->id],
@@ -454,11 +478,11 @@ class MixTest extends TestCase
         ]))->assertSee('Mezcla actualizada correctamente.');
 
         $response = $this->submitEdit($mix, $this->payload([
-            'flavors' => [$this->notFavorite->id, $this->first->id],
+            'flavors' => [$hidden->id, $this->first->id],
             'ratios' => [60, 40],
         ]));
 
-        $response->assertSee('Solo puedes añadir sabores de tus favoritos.');
+        $response->assertSee('Solo puedes añadir sabores del catálogo.');
         $this->assertEquals([$this->second->id => 60, $this->first->id => 40], $this->savedRatios($mix));
     }
 
@@ -597,14 +621,62 @@ class MixTest extends TestCase
         }
     }
 
-    public function test_the_create_form_explains_how_to_get_flavors_when_there_are_no_favorites(): void
+    // Spec 009, RF2 y RF4: sin favoritos, el formulario ofrece igualmente el catálogo, sin el grupo de favoritos ni el aviso.
+    public function test_without_favorites_the_create_form_still_offers_the_catalog(): void
     {
         $this->actingAs(User::factory()->create());
 
-        $this->get(route('mixes.create'))
-            ->assertOk()
-            ->assertSee('Todavía no tienes favoritos')
-            ->assertSee('href="'.route('home').'"', false);
+        $template = $this->newRowTemplate($this->get(route('mixes.create'))->assertOk()->getContent());
+
+        foreach ([$this->first, $this->second, $this->notFavorite] as $flavor) {
+            $this->assertStringContainsString('<option value="'.$flavor->id.'"', $template);
+        }
+        $this->assertStringNotContainsString('Tus favoritos', $template);
+        $this->assertStringContainsString('<optgroup label="Resto del catálogo">', $template);
+        $this->assertStringNotContainsString('data-favorite', $template);
+        $this->get(route('mixes.create'))->assertDontSee('Todavía no tienes favoritos');
+    }
+
+    // Spec 009, RF2: crear ofrece todos los sabores públicos (no los ocultos), con los favoritos primero y marcados.
+    public function test_the_create_form_offers_the_public_catalog_with_favorites_first(): void
+    {
+        $hidden = Flavor::factory()->notPublic()->create(['name' => 'Oculto']);
+        $this->addFavorite($hidden);
+
+        $response = $this->get(route('mixes.create'))->assertOk();
+        $template = $this->newRowTemplate($response->getContent());
+
+        $favoritesAt = strpos($template, '<optgroup label="Tus favoritos">');
+        $restAt = strpos($template, '<optgroup label="Resto del catálogo">');
+        $this->assertNotFalse($favoritesAt);
+        $this->assertNotFalse($restAt);
+
+        foreach ([$this->first, $this->second] as $favorite) {
+            $at = strpos($template, '<option value="'.$favorite->id.'"');
+            $this->assertTrue($favoritesAt < $at && $at < $restAt);
+            $this->assertMatchesRegularExpression('/<option value="'.$favorite->id.'"[^>]*data-favorite="1"/', $template);
+        }
+
+        $this->assertGreaterThan($restAt, strpos($template, '<option value="'.$this->notFavorite->id.'"'));
+        $this->assertDoesNotMatchRegularExpression('/<option value="'.$this->notFavorite->id.'"[^>]*data-favorite/', $template);
+        $this->assertStringNotContainsString('<option value="'.$hidden->id.'"', $response->getContent());
+
+        $response->assertSee('Elige sabores del catálogo y reparte los porcentajes.');
+        $response->assertDontSee('Todavía no tienes favoritos');
+    }
+
+    // Spec 009, RF2: editar añade los sabores ya presentes aunque no sean públicos.
+    public function test_the_edit_form_offers_the_catalog_and_the_present_hidden_flavor(): void
+    {
+        $present = Flavor::factory()->notPublic()->create(['name' => 'Presente oculto']);
+        $other = Flavor::factory()->notPublic()->create(['name' => 'Otro oculto']);
+        $mix = $this->savedMix([$present->id => 60, $this->first->id => 40]);
+
+        $template = $this->newRowTemplate($this->get(route('mixes.edit', $mix))->assertOk()->getContent());
+
+        $this->assertStringContainsString('<option value="'.$present->id.'"', $template);
+        $this->assertStringContainsString('<option value="'.$this->notFavorite->id.'"', $template);
+        $this->assertStringNotContainsString('<option value="'.$other->id.'"', $template);
     }
 
     public function test_the_list_draws_the_composition_of_each_mix_with_its_brand(): void

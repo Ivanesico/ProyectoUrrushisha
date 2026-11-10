@@ -135,17 +135,47 @@ class MixController extends Controller {
     }
 
     public function create() {
-        $favoriteFlavorIds = \App\Models\Favorite::where('user_id', auth()->id())
-                ->pluck('flavor_id');
-
-        $flavors = \App\Models\Flavor::whereIn('id', $favoriteFlavorIds)
-                ->with('brand')
-                ->orderBy('name')
-                ->get();
+        $flavorGroups = $this->flavorGroups();
 
         $rows = $this->rejectedRows() ?? $this->emptyRows();
 
-        return view('mixes.create', compact('flavors', 'rows'));
+        return view('mixes.create', compact('flavorGroups', 'rows'));
+    }
+
+    /**
+     * Spec 009: sabores que ofrece el formulario de mezcla: todos los públicos y los ya presentes
+     * en la mezcla ($presentIds, al editar). Primero los favoritos y luego el resto, cada grupo por nombre.
+     * Se ordena en PHP para no depender del orden de cada motor.
+     *
+     * @param  \Illuminate\Support\Collection<int, int>|array<int, int>  $presentIds
+     * @return array<int, array{label: string, favorite: bool, flavors: \Illuminate\Support\Collection}>
+     */
+    private function flavorGroups($presentIds = []): array {
+        $favoriteIds = Favorite::where('user_id', auth()->id())->pluck('flavor_id')->map(fn ($id) => (int) $id)->all();
+
+        $flavors = Flavor::with('brand')
+                ->where(fn ($query) => $query->where('is_public', true)->orWhereIn('id', $presentIds))
+                ->get()
+                // Sin mayúsculas ni acentos, como el buscador; desempate por id.
+                ->sortBy([
+                    fn (Flavor $a, Flavor $b) => Flavor::normalizeSearchTerm($a->name) <=> Flavor::normalizeSearchTerm($b->name),
+                    fn (Flavor $a, Flavor $b) => $a->id <=> $b->id,
+                ])
+                ->values();
+
+        [$favorites, $others] = $flavors->partition(fn (Flavor $flavor) => in_array($flavor->id, $favoriteIds, true));
+
+        $groups = [];
+
+        if ($favorites->isNotEmpty()) {
+            $groups[] = ['label' => 'Tus favoritos', 'favorite' => true, 'flavors' => $favorites->values()];
+        }
+
+        if ($others->isNotEmpty()) {
+            $groups[] = ['label' => 'Resto del catálogo', 'favorite' => false, 'flavors' => $others->values()];
+        }
+
+        return $groups;
     }
 
     public function store(StoreMixRequest $request) {
@@ -168,22 +198,14 @@ class MixController extends Controller {
             abort(403);
         }
         $mix->load('items');
-        // Los favoritos más los sabores ya presentes, aunque hayan dejado de ser favoritos
-        $flavors = Flavor::whereIn('id', function ($query) {
-                    $query->select('flavor_id')
-                            ->from('favorites')
-                            ->where('user_id', auth()->id());
-                })
-                ->orWhereIn('id', $mix->items->pluck('flavor_id'))
-                ->with('brand')
-                ->orderBy('name')
-                ->get();
+        // El catálogo público más los sabores ya presentes, aunque hayan dejado de ser públicos (spec 009)
+        $flavorGroups = $this->flavorGroups($mix->items->pluck('flavor_id'));
 
         $rows = $this->rejectedRows() ?? $mix->items
                 ->map(fn ($item) => ['flavor_id' => $item->flavor_id, 'ratio' => $item->ratio])
                 ->all();
 
-        return view('mixes.edit', compact('mix', 'flavors', 'rows'));
+        return view('mixes.edit', compact('mix', 'flavorGroups', 'rows'));
     }
 
     public function update(StoreMixRequest $request, Mix $mix) {
