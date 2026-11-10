@@ -44,9 +44,10 @@ class FlavorController extends Controller {
             default => '',
         });
 
-        $favoriteIds = \App\Models\Favorite::where('user_id', $user->id)
-                ->pluck('flavor_id')
-                ->toArray();
+        // Sin sesión no hay favoritos y no se consulta la tabla (spec 006).
+        $favoriteIds = $user
+                ? \App\Models\Favorite::where('user_id', $user->id)->pluck('flavor_id')->toArray()
+                : [];
 
         $brands = Brand::orderBy('name')->get();
         $categories = Category::orderBy('name')->get();

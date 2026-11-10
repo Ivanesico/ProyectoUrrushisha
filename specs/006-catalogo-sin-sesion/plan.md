@@ -1,0 +1,30 @@
+# Plan breve — 006: Catálogo sin sesión (modo ligero) — Estado: aprobado (2026-11-10)
+
+- **Cambio**: (4) hoy todo, salvo login y registro, está dentro de `middleware('auth')`. Un visitante sin sesión podrá ver la portada (catálogo con buscador, filtros, orden, paginación y modal de detalle) y Marcas (`brands.index` y `brands.show`). Favoritos, Mezclas y Admin siguen pidiendo sesión. Las mezclas públicas quedan para el punto 5 (spec 007), que se diseñará ya visible sin sesión.
+- **Archivos**: `routes/web.php`, `app/Http/Controllers/Controller.php` (un método compartido), `app/Http/Controllers/LoginController.php`, `app/Http/Controllers/RegisterController.php`, `app/Http/Controllers/AuthController.php` (`login` y `register`), `app/Http/Controllers/FlavorController.php` (solo `index`), `resources/views/layouts/app.blade.php`, `resources/views/index.blade.php`, `resources/views/flavors/_detail-modal.blade.php`, `tests/Feature/AuthTest.php`, `tests/Feature/BrandTest.php` y `tests/Feature/CatalogTest.php`. Ningún archivo NUEVO; sin migraciones ni dependencias.
+- **RF1** (rutas): `home`, `brands.index` y `brands.show` salen del grupo `auth` y quedan abiertas a todos (con y sin sesión; no van en `guest`). El resto de rutas no cambia: un visitante que pide Favoritos, Mezclas o Admin sigue yendo a login.
+- **RF2** (catálogo para visitantes): la portada se ve igual que con sesión, con los mismos datos (solo sabores públicos), filtros, orden y paginación. Sin sesión no hay favoritos: ningún corazón sale marcado y no se consulta la tabla `favorites`.
+- **RF3** (acciones que piden sesión): para un visitante, el corazón de cada tarjeta y "Crear mezcla" del modal se ven igual, pero son enlaces a `route('login')` (no formularios ni `fetch`). El enlace del corazón no abre el modal (como hoy el botón) y su `aria-label` dice "Inicia sesión para añadir <sabor> a favoritos". Al iniciar sesión, NO se guarda el favorito: solo se vuelve a la página.
+- **RF4** (volver a la página): al abrir login o registro, si la sesión no tiene ya un destino (`url.intended`), se guarda como destino la última página que el visitante vio en la app (la URL anterior de la sesión de Laravel, no la cabecera `Referer`), siempre que sea del mismo host y no sea login ni registro. Tras iniciar sesión o registrarse, se va a ese destino (`redirect()->intended(route('home'))`); sin destino, a `home`, como hoy. Así también funciona el caso de Laravel: quien pide `/favorites` sin sesión vuelve a Favoritos tras entrar.
+- **RF5** (navegación del visitante): en la barra superior, en lugar del menú de usuario, botones "Iniciar sesión" y "Registrarse". En escritorio, la navegación muestra solo Sabores y Marcas. En el móvil, la barra inferior muestra solo Sabores y Marcas. Con sesión, nada cambia. Login y registro siguen sin barras (como hoy).
+- **RF6**: a 375 px, el logo y los dos botones caben en la barra superior sin scroll horizontal (en pantallas pequeñas se puede ocultar el texto "URRUSHISHA" o reducir los botones). Tema oscuro coherente con el resto. Consola sin errores, con y sin sesión.
+- **Fuera de alcance**: mezclas públicas (punto 5); guardar el favorito pendiente tras iniciar sesión; cambiar a dónde lleva "Cerrar sesión" (sigue yendo a login); SEO o metadatos para buscadores.
+- **Decisiones**:
+  - Enlaces normales a login en vez de mandar el formulario del corazón y dejar que el middleware redirija: un `POST` sin sesión daría 401 al `fetch` y dependería del `Referer` para volver.
+  - El destino se guarda al abrir login o registro, en un método del `Controller` base que usan los dos `index`. Así vale para el corazón, "Crear mezcla" y los botones de la barra, sin pasar URLs por parámetro (nunca se redirige a una URL externa).
+  - Comprobación de host: se compara con `url('/')` de la app; si no coincide, no se guarda nada.
+  - Checklist de Postgres: no hay consultas nuevas; solo se evita la de favoritos sin sesión.
+- **Tests existentes que cambian**:
+  - `AuthTest::test_only_login_and_registration_are_open_to_guests`: la lista de rutas abiertas añade `home`, `brands.index` y `brands.show`.
+  - `AuthTest` (logout, línea ~156): tras cerrar sesión, se comprueba con una ruta que sigue protegida (`favorites.index`), porque `home` ya responde 200.
+  - `BrandTest::test_the_list_requires_a_session` y el equivalente de `brands.show` (línea ~178): pasan a comprobar que un visitante ve la página.
+  - `test_a_guest_is_redirected_to_login_from_every_protected_route` no cambia (recorre las rutas con `auth`).
+  - Añadido durante T1: `ExampleTest` comprobaba que `/` redirige a login; ahora usa `RefreshDatabase` y comprueba que la portada responde 200.
+- [x] **T1**, RF1, RF2 y RF4 (servidor):
+  - Primero, los tests en rojo: un visitante ve la portada (filtros, orden y paginación) y Marcas sin corazones marcados; Favoritos, Mezclas y Admin siguen redirigiendo a login; login y registro tras visitar una página del catálogo vuelven a ella (con su query string); sin página previa, o si la previa es login/registro, van a `home`; un `url.intended` que ya existe no se pisa; los tests existentes de arriba, ajustados.
+  - Después, las rutas, el método del `Controller` base, los `index` de login y registro, `intended` en `AuthController` y `favoriteIds` vacío sin sesión en `FlavorController`.
+  - Hecho cuando: `php artisan test` está en verde.
+- [x] **T2**, RF3, RF5 y RF6 (vistas):
+  - Primero, los tests en rojo: sin sesión, la portada lleva enlaces a login en el corazón y en "Crear mezcla" (y ningún formulario a `favorites.store`), la barra muestra "Iniciar sesión" y "Registrarse" y solo enlaza Sabores y Marcas; con sesión, todo sigue igual.
+  - Después, `layouts/app.blade.php`, `index.blade.php` y `flavors/_detail-modal.blade.php`.
+  - Hecho cuando: los tests están en verde y, a 375 px, con y sin sesión, la portada y Marcas se ven sin scroll horizontal ni errores en consola.

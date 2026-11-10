@@ -139,6 +139,36 @@
                 font-weight: 800;
             }
 
+            /* Botones de acceso para visitantes (spec 006) */
+            .us-access {
+                padding: 0.4rem 0.9rem;
+                border-radius: 999px;
+                font-size: 0.9rem;
+                font-weight: 700;
+                white-space: nowrap;
+            }
+
+            .us-access-login {
+                border: 1px solid var(--us-line);
+                color: var(--us-text-strong);
+            }
+
+            .us-access-login:hover {
+                background: var(--us-hover);
+                color: var(--us-text-strong);
+            }
+
+            .us-access-register {
+                border: 0;
+                background: linear-gradient(135deg, #8b5cf6, #ec4899);
+                color: #ffffff;
+            }
+
+            .us-access-register:hover {
+                color: #ffffff;
+                filter: brightness(1.08);
+            }
+
             .us-subnav {
                 display: flex;
                 gap: 0.25rem;
@@ -233,6 +263,7 @@
             .us-link:focus-visible,
             .us-tab:focus-visible,
             .us-brand:focus-visible,
+            .us-access:focus-visible,
             .us-user:focus-visible {
                 outline: 2px solid #f472b6;
                 outline-offset: 2px;
@@ -265,6 +296,11 @@
                 ['route' => 'brands.index', 'active' => 'brands.*', 'label' => 'Marcas', 'icon' => 'brands'],
             ];
 
+            // Sin sesión solo se pueden ver Sabores y Marcas (spec 006)
+            if (!auth()->check()) {
+                $navItems = array_values(array_filter($navItems, fn ($item) => in_array($item['route'], ['home', 'brands.index'], true)));
+            }
+
             if (auth()->user()?->is_admin) {
                 $navItems[] = ['route' => 'admin.index', 'active' => 'admin.*', 'label' => 'Admin', 'icon' => 'admin'];
             }
@@ -291,10 +327,10 @@
                 <div class="us-topbar-row">
                     <a class="us-brand" href="{{ route('home') }}">
                         <img src="{{ asset('images/logo-urrushisha.png') }}" alt="" width="176" height="151">
-                        <span>URRUSHISHA</span>
+                        {{-- Sin sesión, en el móvil se oculta el nombre para que quepan los botones de acceso --}}
+                        <span class="@guest d-none d-sm-inline @endguest">URRUSHISHA</span>
                     </a>
 
-                    @auth
                     <nav class="d-none d-lg-flex align-items-center gap-1" aria-label="Navegación principal">
                         @foreach($navItems as $item)
                         @php $isActive = request()->routeIs($item['active']); @endphp
@@ -305,6 +341,12 @@
                         @endforeach
                     </nav>
 
+                    @guest
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="{{ route('login') }}" class="btn us-access us-access-login">Iniciar sesión</a>
+                        <a href="{{ route('register') }}" class="btn us-access us-access-register">Registrarse</a>
+                    </div>
+                    @else
                     <div class="dropdown">
                         <button class="us-user dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Menú de {{ auth()->user()->name }}">
                             <span class="us-avatar" aria-hidden="true">{{ mb_strtoupper(mb_substr(auth()->user()->name, 0, 1)) }}</span>
@@ -319,7 +361,7 @@
                             </form>
                         </div>
                     </div>
-                    @endauth
+                    @endguest
                 </div>
             </div>
 
@@ -348,11 +390,13 @@
         @endif
 
         {{-- CONTENIDO --}}
-        <main class="flex-grow-1 py-4 @auth us-has-tabbar @endauth">
+        {{-- La barra inferior sale en todas las páginas salvo login y registro; sin sesión, solo con Sabores y Marcas --}}
+        @php $hasTabbar = !request()->routeIs('login', 'register'); @endphp
+        <main class="flex-grow-1 py-4 {{ $hasTabbar ? 'us-has-tabbar' : '' }}">
             @yield('content')
         </main>
 
-        @auth
+        @if ($hasTabbar)
         <nav class="us-tabbar d-lg-none" aria-label="Navegación principal">
             @foreach($navItems as $item)
             @php $isActive = request()->routeIs($item['active']); @endphp
@@ -362,7 +406,7 @@
             </a>
             @endforeach
         </nav>
-        @endauth
+        @endif
 
         @if (request()->routeIs('login','register'))
         <script>

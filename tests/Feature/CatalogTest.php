@@ -1027,6 +1027,134 @@ class CatalogTest extends TestCase
         $response->assertDontSee('Siguiente');
     }
 
+    // Spec 006: el setUp inicia sesión; aquí se vuelve a visitante.
+    private function asGuest(): void
+    {
+        $this->app['auth']->forgetGuards();
+        $this->assertGuest();
+    }
+
+    // Spec 006, RF1 y RF2: un visitante ve el catálogo con filtros, orden y paginación, solo con sabores públicos.
+    public function test_a_guest_sees_the_catalog_with_filters_sort_and_pagination(): void
+    {
+        $brand = Brand::factory()->create();
+        Flavor::factory()->for($brand)->count(13)->sequence(fn ($s) => ['name' => sprintf('Menta %02d', $s->index)])->create();
+        Flavor::factory()->for($brand)->create(['name' => 'Fresa']);
+        Flavor::factory()->for($brand)->notPublic()->create(['name' => 'Menta oculta']);
+
+        $this->asGuest();
+
+        $all = $this->catalog();
+        $this->assertCount(12, $this->names($all));
+        $all->assertDontSee('Menta oculta');
+
+        $filtered = $this->catalog(['name' => 'menta', 'brand_id' => $brand->id, 'sort' => 'name_desc']);
+        $this->assertSame('Menta 12', $this->names($filtered)[0]);
+        $this->assertSame(13, $filtered->viewData('flavors')->total());
+
+        $secondPage = $this->catalog(['name' => 'menta', 'sort' => 'name_desc', 'page' => 2]);
+        $this->assertSame(['Menta 00'], $this->names($secondPage));
+
+        $this->assertGuest();
+    }
+
+    // Spec 006, RF2: sin sesión no hay favoritos marcados y no se consulta la tabla favorites.
+    public function test_a_guest_has_no_favorites_and_the_table_is_not_queried(): void
+    {
+        $flavor = Flavor::factory()->create(['name' => 'Menta']);
+        Favorite::create(['user_id' => User::factory()->create()->id, 'flavor_id' => $flavor->id]);
+
+        $this->asGuest();
+
+        DB::enableQueryLog();
+        $response = $this->catalog();
+        $queries = collect(DB::getQueryLog())->pluck('query');
+        DB::disableQueryLog();
+
+        $this->assertSame([], $response->viewData('favoriteIds'));
+        $response->assertDontSee('favorite-btn active', false);
+        $this->assertFalse($queries->contains(fn ($sql) => str_contains($sql, 'favorites')));
+    }
+
+    // Spec 006, RF1: Favoritos, Mezclas y Admin siguen pidiendo sesión.
+    public function test_a_guest_is_still_sent_to_login_from_favorites_mixes_and_admin(): void
+    {
+        $this->asGuest();
+
+        foreach (['favorites.index', 'mixes.index', 'mixes.create', 'admin.index', 'admin.flavors.index'] as $name) {
+            $this->get(route($name))->assertRedirect(route('login'));
+        }
+    }
+
+    // Spec 006, RF3: sin sesión, el corazón y "Crear mezcla" son enlaces a login, no formularios.
+    public function test_for_a_guest_the_heart_and_create_mix_link_to_login(): void
+    {
+        $flavor = Flavor::factory()->create(['name' => 'Menta']);
+
+        $this->asGuest();
+
+        $response = $this->catalog();
+
+        $response->assertSee('<a href="'.route('login').'" class="favorite-btn"', false);
+        $response->assertSee('aria-label="Inicia sesión para añadir Menta a favoritos"', false);
+        $response->assertDontSee('action="'.route('favorites.store', $flavor).'"', false);
+        $response->assertDontSee('data-favorite-toggle', false);
+
+        $response->assertSee('<a href="'.route('login').'" class="btn flavor-detail-primary">Crear mezcla</a>', false);
+        $response->assertDontSee('href="'.route('mixes.create').'"', false);
+    }
+
+    // Spec 006, RF3: con sesión, el corazón y "Crear mezcla" siguen igual.
+    public function test_with_a_session_the_heart_and_create_mix_do_not_change(): void
+    {
+        $flavor = Flavor::factory()->create(['name' => 'Menta']);
+
+        $response = $this->catalog();
+
+        $response->assertSee('action="'.route('favorites.store', $flavor).'"', false);
+        $response->assertSee('data-favorite-toggle', false);
+        $response->assertSee('aria-label="Añadir Menta a favoritos"', false);
+        $response->assertSee('<a href="'.route('mixes.create').'" class="btn flavor-detail-primary">Crear mezcla</a>', false);
+        $response->assertDontSee('Inicia sesión para añadir', false);
+    }
+
+    // Spec 006, RF5: el visitante ve "Iniciar sesión" y "Registrarse" y solo enlaces a Sabores y Marcas, en la portada y en Marcas.
+    public function test_a_guest_sees_the_access_buttons_and_only_flavors_and_brands(): void
+    {
+        $brand = Brand::factory()->create();
+
+        $this->asGuest();
+
+        foreach ([route('home'), route('brands.index'), route('brands.show', $brand)] as $url) {
+            $response = $this->get($url)->assertOk();
+
+            $response->assertSee('href="'.route('login').'" class="btn us-access us-access-login">Iniciar sesión</a>', false);
+            $response->assertSee('href="'.route('register').'" class="btn us-access us-access-register">Registrarse</a>', false);
+            $response->assertSee('href="'.route('home').'" class="us-tab', false);
+            $response->assertSee('href="'.route('brands.index').'" class="us-tab', false);
+            $response->assertSee('href="'.route('brands.index').'" class="us-link', false);
+
+            foreach (['favorites.index', 'mixes.index', 'admin.index'] as $hidden) {
+                $response->assertDontSee('href="'.route($hidden).'"', false);
+            }
+
+            $response->assertDontSee('Cerrar sesión');
+        }
+    }
+
+    // Spec 006, RF5: con sesión, la navegación no cambia.
+    public function test_with_a_session_the_navigation_does_not_change(): void
+    {
+        $response = $this->catalog();
+
+        foreach (['home', 'favorites.index', 'mixes.index', 'brands.index'] as $name) {
+            $response->assertSee('href="'.route($name).'" class="us-tab', false);
+        }
+
+        $response->assertSee('Cerrar sesión');
+        $response->assertDontSee('class="btn us-access', false);
+    }
+
     private function assertNoEnglishPagination(TestResponse $response): void
     {
         foreach (['Showing', 'Previous', 'Next', 'pagination.previous', 'pagination.next'] as $text) {

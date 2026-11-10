@@ -34,11 +34,13 @@ Route::post('/logout', [AuthController::class, 'logout'])
         ->middleware('auth')
         ->name('logout');
 
-// TODO lo demás requiere iniciar sesión
-Route::middleware('auth')->group(function () {
+// Abiertas a todos, con o sin sesión: el catálogo y las marcas (spec 006)
+Route::get('/', [FlavorController::class, 'index'])->name('home');
+Route::get('/brands', [BrandController::class, 'index'])->name('brands.index');
+Route::get('/brands/{brand}', [BrandController::class, 'show'])->name('brands.show');
 
-    // Al entrar, ver sabores directamente
-    Route::get('/', [FlavorController::class, 'index'])->name('home');
+// Lo demás requiere iniciar sesión
+Route::middleware('auth')->group(function () {
 
     Route::get('/mixes/create', [MixController::class, 'create'])->name('mixes.create');
     Route::post('/mixes', [MixController::class, 'store'])->name('mixes.store');
@@ -50,10 +52,6 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/favorites', [FavoriteController::class, 'index'])->name('favorites.index');
     Route::post('/favorites/{flavor}', [FavoriteController::class, 'store'])->name('favorites.store');
-
-    // Brands (vista normal)
-    Route::get('/brands', [BrandController::class, 'index'])->name('brands.index');
-    Route::get('/brands/{brand}', [BrandController::class, 'show'])->name('brands.show');
 
     // Admin
     Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {

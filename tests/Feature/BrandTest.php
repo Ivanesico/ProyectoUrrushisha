@@ -92,9 +92,13 @@ class BrandTest extends TestCase
         $response->assertDontSee('flavors/oculto.webp', false);
     }
 
-    public function test_the_list_requires_a_session(): void
+    // Spec 006, RF1: Marcas se ve sin sesión.
+    public function test_a_guest_sees_the_list(): void
     {
-        $this->get(route('brands.index'))->assertRedirect(route('login'));
+        Brand::factory()->create(['name' => 'Marca visible']);
+
+        $this->get(route('brands.index'))->assertOk()->assertSee('Marca visible');
+        $this->assertGuest();
     }
 
     // RF-14
@@ -171,10 +175,17 @@ class BrandTest extends TestCase
             ->assertSee('Página no encontrada');
     }
 
-    public function test_the_detail_requires_a_session(): void
+    // Spec 006, RF1: el detalle de una marca se ve sin sesión, solo con sus sabores públicos.
+    public function test_a_guest_sees_the_detail(): void
     {
-        $brand = Brand::factory()->create();
+        $brand = Brand::factory()->create(['name' => 'Marca visible']);
+        Flavor::factory()->for($brand)->create(['name' => 'Sabor visible']);
+        Flavor::factory()->for($brand)->notPublic()->create(['name' => 'Sabor oculto']);
 
-        $this->get(route('brands.show', $brand))->assertRedirect(route('login'));
+        $this->get(route('brands.show', $brand))
+            ->assertOk()
+            ->assertSee('Sabor visible')
+            ->assertDontSee('Sabor oculto');
+        $this->assertGuest();
     }
 }

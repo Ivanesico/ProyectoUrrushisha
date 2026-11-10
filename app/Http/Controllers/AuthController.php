@@ -21,8 +21,9 @@ class AuthController extends Controller {
 
         Auth::login($usuario);
         $request->session()->regenerate();
+        // Spec 006, RF4: vuelve a la página que se estaba viendo; si no hay, al catálogo.
         return redirect()
-                        ->route('home')
+                        ->intended(route('home'))
                         ->with('success', 'Usuario registrado con éxito');
     }
 
@@ -38,7 +39,8 @@ class AuthController extends Controller {
         Auth::login($usuario);
         $request->session()->regenerate();
 
-        return redirect()->route('home');
+        // Spec 006, RF4: vuelve a la página que se estaba viendo; si no hay, al catálogo.
+        return redirect()->intended(route('home'));
     }
 
     public function logout(Request $request) {

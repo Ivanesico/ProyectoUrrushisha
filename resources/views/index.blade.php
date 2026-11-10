@@ -177,6 +177,10 @@
                  onkeydown="if (event.key === 'Enter' && event.target === this) openFlavorModal({{ $flavor->id }})">
                 <div class="card-top-actions">
                     {{-- El corazón no abre la ventana --}}
+                    @guest
+                    {{-- Sin sesión, el corazón lleva a iniciar sesión (spec 006) --}}
+                    <a href="{{ route('login') }}" class="favorite-btn" title="Inicia sesión para guardar favoritos" aria-label="Inicia sesión para añadir {{ $flavor->name }} a favoritos" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">♥</a>
+                    @else
                     @php($isFavorite = in_array($flavor->id, $favoriteIds))
                     <form action="{{ route('favorites.store', $flavor) }}" method="POST" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();" data-favorite-toggle data-flavor-id="{{ $flavor->id }}" data-flavor-name="{{ $flavor->name }}">
                         @csrf
@@ -184,6 +188,7 @@
                             ♥
                         </button>
                     </form>
+                    @endguest
                 </div>
 
                 <div class="flavor-image-wrapper">
@@ -247,7 +252,10 @@
     @foreach($flavors as $flavor)
     @include('flavors._detail-modal', ['flavor' => $flavor])
     @endforeach
+    {{-- Sin sesión el corazón es un enlace: no hace falta el script de favoritos --}}
+    @auth
     @include('partials._favorite-toggle')
+    @endauth
 
     @if($flavors->hasPages())
     <div class="d-flex justify-content-center mt-5">
@@ -512,6 +520,11 @@
     }
 
     .favorite-btn {
+        /* También es un enlace para los visitantes: centrado y sin subrayado */
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
         width: 44px;
         height: 44px;
         border: none;

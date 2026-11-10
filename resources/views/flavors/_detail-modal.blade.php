@@ -44,7 +44,8 @@
                     <div class="flavor-detail-ingredients mb-4">{{ $flavor->ingredients_text ?: 'Sin ingredientes definidos' }}</div>
 
                     <div class="d-flex flex-wrap gap-2">
-                        <a href="{{ route('mixes.create') }}" class="btn flavor-detail-primary">Crear mezcla</a>
+                        {{-- Sin sesión lleva a iniciar sesión (spec 006) --}}
+                        <a href="{{ auth()->check() ? route('mixes.create') : route('login') }}" class="btn flavor-detail-primary">Crear mezcla</a>
                         <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cerrar</button>
                     </div>
                 </div>

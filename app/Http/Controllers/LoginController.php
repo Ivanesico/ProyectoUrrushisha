@@ -11,10 +11,12 @@ class LoginController extends Controller {
     /**
      * Display a listing of the resource.
      */
-    public function index() {
+    public function index(Request $request) {
         if (Auth::check()) {
             return redirect('/');
         }
+
+        $this->rememberPageBeforeLogin($request);
 
         return view('login');
     }

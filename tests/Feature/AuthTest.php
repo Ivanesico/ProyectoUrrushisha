@@ -153,7 +153,8 @@ class AuthTest extends TestCase
             ->assertRedirect(route('login'));
 
         $this->assertGuest();
-        $this->get(route('home'))->assertRedirect(route('login'));
+        // Spec 006: la portada ya es pública; se comprueba con una ruta que sigue protegida.
+        $this->get(route('favorites.index'))->assertRedirect(route('login'));
     }
 
     // RF-7: recorre las rutas reales, para que una ruta nueva no pueda quedar fuera.
@@ -178,8 +179,8 @@ class AuthTest extends TestCase
         $this->assertGuest();
     }
 
-    // RF-7: el caso contrario, solo login, registro y las rutas técnicas quedan sin `auth`.
-    public function test_only_login_and_registration_are_open_to_guests(): void
+    // RF-7: el caso contrario, solo login, registro, el catálogo y Marcas (spec 006) y las rutas técnicas quedan sin `auth`.
+    public function test_only_login_registration_catalog_and_brands_are_open_to_guests(): void
     {
         $open = [];
 
@@ -192,7 +193,7 @@ class AuthTest extends TestCase
         $technical = ['storage.local', 'storage.local.upload', 'up'];
 
         $this->assertEqualsCanonicalizing(
-            ['login', 'register', 'auth.login', 'auth.register'],
+            ['login', 'register', 'auth.login', 'auth.register', 'home', 'brands.index', 'brands.show'],
             array_values(array_diff($open, $technical))
         );
 
@@ -362,5 +363,87 @@ class AuthTest extends TestCase
         $response->assertOk();
         $response->assertSee($message);
         $this->assertGuest();
+    }
+
+    private function logIn(): \Illuminate\Testing\TestResponse
+    {
+        $user = User::factory()->create(['email' => 'ana@example.com', 'password' => Hash::make('secreto123')]);
+
+        return $this->post(route('auth.login'), ['email' => $user->email, 'password' => 'secreto123']);
+    }
+
+    // Spec 006, RF4: tras iniciar sesión se vuelve a la página del catálogo que se estaba viendo, con sus filtros.
+    public function test_logging_in_goes_back_to_the_catalog_page_the_visitor_was_on(): void
+    {
+        $this->get(route('home', ['name' => 'menta', 'sort' => 'name_asc']))->assertOk();
+        $this->get(route('login'))->assertOk();
+
+        // Laravel guarda la URL de la portada con la barra final: es la misma página.
+        $this->logIn()->assertRedirect(url('/').'/?name=menta&sort=name_asc');
+        $this->assertAuthenticated();
+    }
+
+    // Spec 006, RF4
+    public function test_registering_goes_back_to_the_page_the_visitor_was_on(): void
+    {
+        $brands = route('brands.index');
+
+        $this->get($brands)->assertOk();
+        $this->get(route('register'))->assertOk();
+
+        $this->post(route('auth.register'), $this->validRegistration())->assertRedirect($brands);
+        $this->assertAuthenticated();
+    }
+
+    // Spec 006, RF4: ir de login a registro (o al revés) no cambia el destino.
+    public function test_switching_between_login_and_registration_keeps_the_page(): void
+    {
+        $brand = \App\Models\Brand::factory()->create();
+        $detail = route('brands.show', $brand);
+
+        $this->get($detail)->assertOk();
+        $this->get(route('login'))->assertOk();
+        $this->get(route('register'))->assertOk();
+        $this->get(route('login'))->assertOk();
+
+        $this->logIn()->assertRedirect($detail);
+    }
+
+    // Spec 006, RF4: sin página previa, o si la previa es login o registro, se va al catálogo.
+    public function test_without_a_previous_page_logging_in_goes_to_the_catalog(): void
+    {
+        $this->get(route('register'))->assertOk();
+        $this->get(route('login'))->assertOk();
+
+        $this->logIn()->assertRedirect(route('home'));
+    }
+
+    // Spec 006, RF4: el destino que pone Laravel al pedir una página protegida no se pisa.
+    public function test_a_protected_page_asked_for_first_is_still_the_destination(): void
+    {
+        $this->get(route('favorites.index'))->assertRedirect(route('login'));
+        $this->get(route('home'))->assertOk();
+        $this->get(route('login'))->assertOk();
+
+        $this->logIn()->assertRedirect(route('favorites.index'));
+    }
+
+    // Spec 006, RF4: nunca se vuelve a otra web, ni por la cabecera Referer ni por una URL anterior de otro host.
+    public function test_a_page_from_another_host_is_never_the_destination(): void
+    {
+        $this->withHeader('Referer', 'https://otra-web.example/trampa')
+            ->get(route('login'))
+            ->assertOk();
+
+        $this->logIn()->assertRedirect(route('home'));
+
+        $this->post(route('logout'));
+
+        $this->withSession(['_previous' => ['url' => 'https://otra-web.example/trampa']])
+            ->get(route('login'))
+            ->assertOk();
+
+        $this->post(route('auth.login'), ['email' => 'ana@example.com', 'password' => 'secreto123'])
+            ->assertRedirect(route('home'));
     }
 }
