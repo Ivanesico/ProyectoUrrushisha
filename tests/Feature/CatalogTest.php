@@ -987,7 +987,11 @@ class CatalogTest extends TestCase
     {
         $linkTo = fn (string $url): string => '#<a href="'.preg_quote($url, '#').'"[^>]*>\s*Crear mezcla\s*</a>#';
 
-        $this->assertMatchesRegularExpression($linkTo(route('mixes.create')), $response->getContent());
+        // Spec 013: el enlace lleva el sabor de la ventana (?flavor=<id>).
+        $this->assertMatchesRegularExpression(
+            '#<a href="'.preg_quote(route('mixes.create'), '#').'\?flavor=\d+"[^>]*>\s*Crear mezcla\s*</a>#',
+            $response->getContent()
+        );
         $this->assertDoesNotMatchRegularExpression($linkTo(route('mixes.index')), $response->getContent());
     }
 
@@ -1101,8 +1105,9 @@ class CatalogTest extends TestCase
         $response->assertDontSee('action="'.route('favorites.store', $flavor).'"', false);
         $response->assertDontSee('data-favorite-toggle', false);
 
-        $response->assertSee('<a href="'.route('login').'" class="btn flavor-detail-primary">Crear mezcla</a>', false);
-        $response->assertDontSee('href="'.route('mixes.create').'"', false);
+        // Spec 013: "Crear mezcla" ya no va a login, sino al formulario con el sabor (que pide entrar y después vuelve).
+        $response->assertSee('<a href="'.route('mixes.create', ['flavor' => $flavor->id]).'" class="btn flavor-detail-primary">Crear mezcla</a>', false);
+        $response->assertDontSee('<a href="'.route('login').'" class="btn flavor-detail-primary">', false);
     }
 
     // Spec 006, RF3: con sesión, el corazón y "Crear mezcla" siguen igual.
@@ -1115,7 +1120,7 @@ class CatalogTest extends TestCase
         $response->assertSee('action="'.route('favorites.store', $flavor).'"', false);
         $response->assertSee('data-favorite-toggle', false);
         $response->assertSee('aria-label="Añadir Menta a favoritos"', false);
-        $response->assertSee('<a href="'.route('mixes.create').'" class="btn flavor-detail-primary">Crear mezcla</a>', false);
+        $response->assertSee('<a href="'.route('mixes.create', ['flavor' => $flavor->id]).'" class="btn flavor-detail-primary">Crear mezcla</a>', false);
         $response->assertDontSee('Inicia sesión para añadir', false);
     }
 

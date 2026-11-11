@@ -134,12 +134,28 @@ class MixController extends Controller {
         return back()->with('success', $message);
     }
 
-    public function create() {
+    public function create(Request $request) {
         $flavorGroups = $this->flavorGroups();
 
-        $rows = $this->rejectedRows() ?? $this->emptyRows();
+        // Tras un error manda lo escrito; si no, el sabor del enlace "Crear mezcla" (spec 013) o una fila vacía.
+        $rows = $this->rejectedRows() ?? $this->linkedFlavorRows($request) ?? $this->emptyRows();
 
         return view('mixes.create', compact('flavorGroups', 'rows'));
+    }
+
+    /**
+     * Spec 013: primera fila con el sabor de ?flavor=, si es un sabor público (la misma regla que al guardar).
+     * Un id no válido no llega a la consulta (Postgres lo rechazaría) y cualquier otro valor se ignora.
+     */
+    private function linkedFlavorRows(Request $request): ?array {
+        $value = $request->query('flavor');
+        $id = is_string($value) ? filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) : false;
+
+        if ($id === false || !Flavor::whereKey($id)->where('is_public', true)->exists()) {
+            return null;
+        }
+
+        return [['flavor_id' => $id, 'ratio' => '']];
     }
 
     /**

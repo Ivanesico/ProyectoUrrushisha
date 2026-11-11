@@ -427,7 +427,8 @@ class FavoriteTest extends TestCase
         $this->assertStringContainsString('un toque de eucalipto para el final', $modal);
         $this->assertStringContainsString('Sin nicotina', $modal);
         $this->assertStringContainsString($mint->brand->name, $modal);
-        $this->assertStringContainsString('href="'.route('mixes.create').'"', $modal);
+        // Spec 013: el enlace lleva el sabor.
+        $this->assertStringContainsString('href="'.route('mixes.create', ['flavor' => $mint->id]).'"', $modal);
         $this->assertStringContainsString('Negro', $this->detailModal($content, $grape));
 
         $this->assertMatchesRegularExpression('/onclick="openFlavorModal\('.$mint->id.'\)"/', $content);

@@ -1413,4 +1413,73 @@ class MixTest extends TestCase
         $response->assertSee('class="mix-visibility', false);
         $response->assertDontSee('class="sort-form"', false);
     }
+
+    // Spec 013, RF2: con ?flavor= de un sabor público, la primera fila sale con él elegido y sin porcentaje.
+    public function test_the_create_form_starts_with_the_flavor_from_the_link(): void
+    {
+        $html = $this->get(route('mixes.create', ['flavor' => $this->notFavorite->id]))->assertOk()->getContent();
+
+        $this->assertSame([[$this->notFavorite->id, '']], $this->formRows($html));
+    }
+
+    /**
+     * @return array<string, array{0: Closure}>
+     */
+    public static function ignoredFlavorLinks(): array
+    {
+        return [
+            'inexistente' => [fn ($t) => '999999'],
+            'no público' => [fn ($t) => (string) Flavor::factory()->notPublic()->create()->id],
+            'texto' => [fn ($t) => 'abc'],
+            'cero' => [fn ($t) => '0'],
+            'desbordado' => [fn ($t) => '99999999999999999999'],
+            'array' => [fn ($t) => [(string) $t->first->id]],
+        ];
+    }
+
+    // Spec 013, RF2: un sabor no válido en el enlace se ignora y el formulario sale vacío, sin error.
+    #[DataProvider('ignoredFlavorLinks')]
+    public function test_an_invalid_flavor_in_the_link_is_ignored(Closure $flavor): void
+    {
+        $html = $this->get(route('mixes.create', ['flavor' => $flavor($this)]))->assertOk()->getContent();
+
+        $this->assertSame([[null, '']], $this->formRows($html));
+    }
+
+    // Spec 013, RF2: tras un error de validación manda lo que escribió el usuario, no el sabor del enlace.
+    public function test_a_rejected_creation_keeps_what_was_written_over_the_link(): void
+    {
+        $form = route('mixes.create', ['flavor' => $this->notFavorite->id]);
+
+        $response = $this->from($form)
+            ->followingRedirects()
+            ->post(route('mixes.store'), $this->payload(['flavors' => [$this->first->id], 'ratios' => [50]]));
+
+        $response->assertSee('La suma de los porcentajes debe ser exactamente 100%.');
+        $this->assertSame([[$this->first->id, '50']], $this->formRows($response->getContent()));
+    }
+
+    // Spec 013, RF3: sin sesión, el enlace pide entrar y después abre el formulario con el sabor.
+    public function test_a_guest_logs_in_and_lands_on_the_form_with_the_flavor(): void
+    {
+        auth()->logout();
+        $form = route('mixes.create', ['flavor' => $this->notFavorite->id]);
+
+        $this->get($form)->assertRedirect(route('login'));
+        $this->get(route('login'))->assertOk();
+        $this->post(route('auth.login'), ['email' => $this->user->email, 'password' => 'password'])->assertRedirect($form);
+
+        $this->assertSame([[$this->notFavorite->id, '']], $this->formRows($this->get($form)->getContent()));
+    }
+
+    // Spec 013, RF1 y RF3: "Crear mezcla" de la ventana lleva el sabor, con y sin sesión.
+    public function test_the_window_link_carries_the_flavor(): void
+    {
+        $link = 'href="'.e(route('mixes.create', ['flavor' => $this->first->id])).'" class="btn flavor-detail-primary">Crear mezcla</a>';
+
+        $this->get(route('home'))->assertSee($link, false);
+
+        auth()->logout();
+        $this->get(route('home'))->assertSee($link, false);
+    }
 }
