@@ -50,7 +50,7 @@
                     @endphp
                     <h3 class="flavor-detail-section">Valoración</h3>
                     <div class="flavor-rating-box mb-4" data-rating-box="{{ $flavor->id }}">
-                        <p class="flavor-rating-summary" data-rating-summary>@if($ratingCount > 0)★ {{ \App\Models\FlavorRating::formatAverage(\App\Models\FlavorRating::roundedAverage($flavor->ratings_avg_stars)) }} · {{ $ratingCount }} {{ $ratingCount === 1 ? 'valoración' : 'valoraciones' }}@else{{ 'Sin valoraciones todavía' }}@endif</p>
+                        <p class="flavor-rating-summary" data-rating-summary>@if($ratingCount > 0)★ {{ \App\Models\FlavorRating::formatAverage(\App\Models\FlavorRating::roundedAverage($flavor->ratings_avg_stars)) }}@else{{ 'Sin valoraciones todavía' }}@endif</p>
 
                         @auth
                         <form action="{{ route('ratings.update', $flavor) }}" method="POST" class="flavor-stars" data-rating-form="{{ $flavor->id }}">
@@ -376,7 +376,7 @@
             if (!box) return;
 
             box.querySelector('[data-rating-summary]').textContent = data.count > 0
-                ? '★ ' + formatAverage(data.average) + ' · ' + data.count + (data.count === 1 ? ' valoración' : ' valoraciones')
+                ? '★ ' + formatAverage(data.average)
                 : 'Sin valoraciones todavía';
 
             box.querySelectorAll('[data-rating-form] .flavor-star').forEach((star) => {

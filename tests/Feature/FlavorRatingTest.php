@@ -198,7 +198,7 @@ class FlavorRatingTest extends TestCase
         return $match[1];
     }
 
-    // RF5: media y número (en singular y plural), o "Sin valoraciones todavía".
+    // RF5: solo la media (sin el número de valoraciones), o "Sin valoraciones todavía".
     public function test_the_window_shows_the_average_and_count(): void
     {
         $single = Flavor::factory()->create(['name' => 'Uno']);
@@ -210,8 +210,8 @@ class FlavorRatingTest extends TestCase
 
         $html = $this->get(route('home'))->assertOk()->getContent();
 
-        $this->assertStringContainsString('<p class="flavor-rating-summary" data-rating-summary>★ 4,3 · 3 valoraciones</p>', $this->ratingBox($html, $this->flavor));
-        $this->assertStringContainsString('<p class="flavor-rating-summary" data-rating-summary>★ 2,0 · 1 valoración</p>', $this->ratingBox($html, $single));
+        $this->assertStringContainsString('<p class="flavor-rating-summary" data-rating-summary>★ 4,3</p>', $this->ratingBox($html, $this->flavor));
+        $this->assertStringContainsString('<p class="flavor-rating-summary" data-rating-summary>★ 2,0</p>', $this->ratingBox($html, $single));
         $this->assertStringContainsString('<p class="flavor-rating-summary" data-rating-summary>Sin valoraciones todavía</p>', $this->ratingBox($html, $unrated));
     }
 
@@ -263,7 +263,7 @@ class FlavorRatingTest extends TestCase
 
         $box = $this->ratingBox($this->get(route('favorites.index'))->assertOk()->getContent(), $this->flavor);
 
-        $this->assertStringContainsString('★ 4,5 · 2 valoraciones', $box);
+        $this->assertStringContainsString('★ 4,5', $box);
         $this->assertStringContainsString('value="4" class="flavor-star is-on" aria-label="Puntuar con 4 estrellas" aria-pressed="true"', $box);
     }
 }
