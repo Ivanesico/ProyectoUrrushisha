@@ -137,8 +137,12 @@ class MixController extends Controller {
     public function create(Request $request) {
         $flavorGroups = $this->flavorGroups();
 
-        // Tras un error manda lo escrito; si no, el sabor del enlace "Crear mezcla" (spec 013) o una fila vacía.
-        $rows = $this->rejectedRows() ?? $this->linkedFlavorRows($request) ?? $this->emptyRows();
+        // Tras un error manda lo escrito; si no, el sabor del enlace "Crear mezcla" (spec 013) o una fila sin sabor.
+        // Spec 014: una mezcla nueva empieza con 2 filas al 50 % (lo pone el servidor para que funcione también sin JavaScript).
+        $rows = $this->rejectedRows() ?? $this->linkedFlavorRows($request) ?? [
+            ['flavor_id' => '', 'ratio' => '50'],
+            ['flavor_id' => '', 'ratio' => '50'],
+        ];
 
         return view('mixes.create', compact('flavorGroups', 'rows'));
     }
@@ -155,7 +159,11 @@ class MixController extends Controller {
             return null;
         }
 
-        return [['flavor_id' => $id, 'ratio' => '']];
+        // Spec 014: el sabor del enlace al 50 % y una segunda fila sin sabor al 50 %.
+        return [
+            ['flavor_id' => $id, 'ratio' => '50'],
+            ['flavor_id' => '', 'ratio' => '50'],
+        ];
     }
 
     /**
@@ -217,9 +225,18 @@ class MixController extends Controller {
         // El catálogo público más los sabores ya presentes, aunque hayan dejado de ser públicos (spec 009)
         $flavorGroups = $this->flavorGroups($mix->items->pluck('flavor_id'));
 
-        $rows = $this->rejectedRows() ?? $mix->items
-                ->map(fn ($item) => ['flavor_id' => $item->flavor_id, 'ratio' => $item->ratio])
-                ->all();
+        $rows = $this->rejectedRows();
+
+        if ($rows === null) {
+            $rows = $mix->items
+                    ->map(fn ($item) => ['flavor_id' => $item->flavor_id, 'ratio' => $item->ratio])
+                    ->all();
+
+            // Spec 014, RF8: una mezcla antigua de 1 sabor se edita con una 2.ª fila vacía (hacen falta 2 para guardar).
+            if (count($rows) === 1) {
+                $rows[] = ['flavor_id' => '', 'ratio' => ''];
+            }
+        }
 
         return view('mixes.edit', compact('mix', 'flavorGroups', 'rows'));
     }

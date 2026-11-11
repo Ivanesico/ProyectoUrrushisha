@@ -175,15 +175,23 @@ class MixTest extends TestCase
         $this->assertFalse((bool) Mix::sole()->is_public);
     }
 
-    public function test_a_single_flavor_at_100_percent_is_valid(): void
+    // Spec 014, RF7: una mezcla necesita al menos 2 sabores, al crear y al editar.
+    public function test_a_single_flavor_at_100_percent_is_rejected(): void
     {
-        $response = $this->submitCreate($this->payload([
-            'flavors' => [$this->first->id],
-            'ratios' => [100],
-        ]));
+        $single = $this->payload(['flavors' => [$this->first->id], 'ratios' => [100]]);
 
-        $response->assertSee('Mezcla creada correctamente.');
-        $this->assertEquals([$this->first->id => 100], $this->savedRatios(Mix::sole()));
+        $created = $this->submitCreate($single);
+
+        $created->assertSee('Una mezcla necesita al menos 2 sabores.');
+        $this->assertSame(0, Mix::count());
+
+        $mix = $this->savedMix();
+        $before = $this->snapshot($mix);
+
+        $edited = $this->submitEdit($mix, $single);
+
+        $edited->assertSee('Una mezcla necesita al menos 2 sabores.');
+        $this->assertSame($before, $this->snapshot($mix));
     }
 
     // RF-58: el límite exacto se acepta
@@ -205,6 +213,7 @@ class MixTest extends TestCase
         $invalidFlavor = 'El sabor seleccionado no es válido.';
         $ratioInteger = 'Cada porcentaje debe ser un número entero.';
         $ratioMin = 'Cada porcentaje debe ser al menos 1.';
+        $minFlavors = 'Una mezcla necesita al menos 2 sabores.';
 
         return [
             'nombre vacío' => [fn ($t) => ['name' => ''], 'El nombre de la mezcla es obligatorio.'],
@@ -212,13 +221,13 @@ class MixTest extends TestCase
             'nombre de 181 caracteres' => [fn ($t) => ['name' => str_repeat('a', 181)], 'El nombre de la mezcla no puede superar los 180 caracteres.'],
             'notas que no son texto' => [fn ($t) => ['notes' => ['x']], 'Las notas deben ser un texto.'],
 
-            'sin sabores' => [fn ($t) => ['flavors' => null], 'Debes añadir al menos un sabor.'],
-            'lista de sabores vacía' => [fn ($t) => ['flavors' => []], 'Debes añadir al menos un sabor.'],
+            'sin sabores' => [fn ($t) => ['flavors' => null], $minFlavors],
+            'lista de sabores vacía' => [fn ($t) => ['flavors' => []], $minFlavors],
             'sabores que no son lista' => [fn ($t) => ['flavors' => 'abc'], 'Los sabores deben enviarse como una lista.'],
             'sabor repetido' => [fn ($t) => ['flavors' => [$t->first->id, $t->first->id], 'ratios' => [50, 50]], 'No puedes repetir un sabor en la misma mezcla.'],
             'más sabores que porcentajes' => [fn ($t) => ['ratios' => [100]], $position],
             'más porcentajes que sabores' => [fn ($t) => ['ratios' => [50, 30, 20]], $position],
-            'sabor y porcentaje en posiciones distintas' => [fn ($t) => ['flavors' => [0 => $t->first->id], 'ratios' => [5 => 100]], $position],
+            'sabor y porcentaje en posiciones distintas' => [fn ($t) => ['flavors' => [0 => $t->first->id, 1 => $t->second->id], 'ratios' => [5 => 50, 6 => 50]], $position],
             // Spec 009: el límite ya no son los favoritos, sino los sabores públicos del catálogo.
             'sabor no público' => [fn ($t) => ['flavors' => [$t->first->id, Flavor::factory()->notPublic()->create()->id]], 'Solo puedes añadir sabores del catálogo.'],
 
@@ -273,12 +282,14 @@ class MixTest extends TestCase
         $this->assertSame($before, $this->snapshot($mix));
     }
 
-    // RF-54: con `required` delante, una lista vacía nunca llega a `min:1`, pero la regla tiene su mensaje
+    // RF-54: con `required` delante, una lista vacía nunca llega a `min`, pero la regla tiene su mensaje.
+    // Spec 014, RF7: `flavors.required` y `flavors.min` comparten el mensaje del mínimo de 2 sabores.
     public function test_the_min_rules_of_the_lists_have_their_own_message(): void
     {
         $messages = (new StoreMixRequest)->messages();
 
-        $this->assertSame('Debes añadir al menos un sabor.', $messages['flavors.min']);
+        $this->assertSame('Una mezcla necesita al menos 2 sabores.', $messages['flavors.required']);
+        $this->assertSame('Una mezcla necesita al menos 2 sabores.', $messages['flavors.min']);
         $this->assertSame('Debes indicar los porcentajes.', $messages['ratios.min']);
         $this->assertSame('Los porcentajes deben enviarse como una lista.', $messages['ratios.array']);
     }
@@ -366,12 +377,12 @@ class MixTest extends TestCase
         $favoritesBefore = Favorite::where('user_id', $this->user->id)->pluck('flavor_id')->sort()->values()->all();
 
         $response = $this->submitCreate($this->payload([
-            'flavors' => [$this->notFavorite->id],
-            'ratios' => [100],
+            'flavors' => [$this->notFavorite->id, $this->first->id],
+            'ratios' => [70, 30],
         ]));
 
         $response->assertSee('Mezcla creada correctamente.');
-        $this->assertEquals([$this->notFavorite->id => 100], $this->savedRatios(Mix::sole()));
+        $this->assertEquals([$this->notFavorite->id => 70, $this->first->id => 30], $this->savedRatios(Mix::sole()));
         $this->assertSame($favoritesBefore, Favorite::where('user_id', $this->user->id)->pluck('flavor_id')->sort()->values()->all());
     }
 
@@ -381,7 +392,7 @@ class MixTest extends TestCase
         $hidden = Flavor::factory()->notPublic()->create();
         $this->addFavorite($hidden);
 
-        $response = $this->submitCreate($this->payload(['flavors' => [$hidden->id], 'ratios' => [100]]));
+        $response = $this->submitCreate($this->payload(['flavors' => [$hidden->id, $this->first->id], 'ratios' => [50, 50]]));
 
         $response->assertSee('Solo puedes añadir sabores del catálogo.');
         $this->assertSame(0, Mix::count());
@@ -449,13 +460,13 @@ class MixTest extends TestCase
         $mix = $this->savedMix([$hidden->id => 60, $this->first->id => 40]);
 
         $response = $this->submitEdit($mix, $this->payload([
-            'flavors' => [$this->first->id],
-            'ratios' => [99],
+            'flavors' => [$this->first->id, $this->second->id],
+            'ratios' => [60, 39],
         ]));
 
         $response->assertSee('La suma de los porcentajes debe ser exactamente 100%.');
         $html = $response->getContent();
-        $this->assertSame([[$this->first->id, '99']], $this->formRows($html));
+        $this->assertSame([[$this->first->id, '60'], [$this->second->id, '39']], $this->formRows($html));
         $this->assertStringContainsString('<option value="'.$hidden->id.'"', $this->newRowTemplate($html));
 
         $response = $this->submitEdit($mix, $this->payload([
@@ -790,12 +801,44 @@ class MixTest extends TestCase
         $this->assertStringContainsString('Mezcla guardada', $this->mixWindow($response->getContent(), $mix));
     }
 
-    public function test_the_create_form_starts_with_one_empty_row_and_no_errors(): void
+    // Spec 014, RF5: una mezcla nueva empieza con dos filas sin sabor al 50 y 50.
+    public function test_the_create_form_starts_with_two_rows_at_50_and_no_errors(): void
     {
         $response = $this->get(route('mixes.create'))->assertOk();
 
         $response->assertDontSee('alert-danger');
-        $this->assertSame([[null, '']], $this->formRows($response->getContent()));
+        $this->assertSame([[null, '50'], [null, '50']], $this->formRows($response->getContent()));
+    }
+
+    // Spec 014, RF7: las mezclas de 1 sabor guardadas antes se siguen listando en Mis mezclas y en Públicas.
+    public function test_an_old_single_flavor_mix_is_still_listed(): void
+    {
+        $mine = $this->savedMix([$this->first->id => 100], ['name' => 'Mía de un sabor']);
+        $this->foreignMix('Ajena de un sabor', [$this->second->id => 100]);
+
+        $this->assertStringContainsString('Mía de un sabor', $this->mixWindow($this->get(route('mixes.index'))->assertOk()->getContent(), $mine));
+        $this->assertSame(['Ajena de un sabor'], $this->publicNames());
+    }
+
+    // Spec 014, RF8: al editar una mezcla de 1 sabor sale su fila y una 2.ª sin sabor ni porcentaje.
+    public function test_editing_a_single_flavor_mix_adds_an_empty_second_row(): void
+    {
+        $mix = $this->savedMix([$this->first->id => 100]);
+
+        $html = $this->get(route('mixes.edit', $mix))->assertOk()->getContent();
+
+        $this->assertSame([[$this->first->id, '100'], [null, '']], $this->formRows($html));
+    }
+
+    // Spec 014, RF8: tras un rechazo, una mezcla de 1 sabor muestra lo escrito, sin la fila extra.
+    public function test_a_rejected_edit_of_a_single_flavor_mix_shows_what_was_written(): void
+    {
+        $mix = $this->savedMix([$this->first->id => 100]);
+
+        $response = $this->submitEdit($mix, $this->payload(['flavors' => [$this->first->id], 'ratios' => [100]]));
+
+        $response->assertSee('Una mezcla necesita al menos 2 sabores.');
+        $this->assertSame([[$this->first->id, '100']], $this->formRows($response->getContent()));
     }
 
     public function test_a_rejected_edit_shows_what_the_user_wrote_not_what_is_saved(): void
@@ -859,6 +902,8 @@ class MixTest extends TestCase
         $response->assertSee('value="Mezcla guardada"', false);
         $response->assertSee('>Notas guardadas</textarea>', false);
         $this->assertCheckboxState($response->getContent(), true);
+        // Spec 014, RF5: al editar, los porcentajes salen tal cual (sin el 100 inicial).
+        $this->assertSame([[$this->first->id, '50'], [$this->second->id, '50']], $this->formRows($response->getContent()));
     }
 
     // RF-31: los valores que no son texto no rompen el formulario al volver a pintarlo
@@ -1414,12 +1459,12 @@ class MixTest extends TestCase
         $response->assertDontSee('class="sort-form"', false);
     }
 
-    // Spec 013, RF2: con ?flavor= de un sabor público, la primera fila sale con él elegido y sin porcentaje.
+    // Spec 013, RF2 (y spec 014, RF5): con ?flavor= de un sabor público, la primera fila sale con él al 50 y la segunda sin sabor al 50.
     public function test_the_create_form_starts_with_the_flavor_from_the_link(): void
     {
         $html = $this->get(route('mixes.create', ['flavor' => $this->notFavorite->id]))->assertOk()->getContent();
 
-        $this->assertSame([[$this->notFavorite->id, '']], $this->formRows($html));
+        $this->assertSame([[$this->notFavorite->id, '50'], [null, '50']], $this->formRows($html));
     }
 
     /**
@@ -1437,13 +1482,13 @@ class MixTest extends TestCase
         ];
     }
 
-    // Spec 013, RF2: un sabor no válido en el enlace se ignora y el formulario sale vacío, sin error.
+    // Spec 013, RF2: un sabor no válido en el enlace se ignora y salen dos filas sin sabor al 50 (spec 014), sin error.
     #[DataProvider('ignoredFlavorLinks')]
     public function test_an_invalid_flavor_in_the_link_is_ignored(Closure $flavor): void
     {
         $html = $this->get(route('mixes.create', ['flavor' => $flavor($this)]))->assertOk()->getContent();
 
-        $this->assertSame([[null, '']], $this->formRows($html));
+        $this->assertSame([[null, '50'], [null, '50']], $this->formRows($html));
     }
 
     // Spec 013, RF2: tras un error de validación manda lo que escribió el usuario, no el sabor del enlace.
@@ -1453,10 +1498,10 @@ class MixTest extends TestCase
 
         $response = $this->from($form)
             ->followingRedirects()
-            ->post(route('mixes.store'), $this->payload(['flavors' => [$this->first->id], 'ratios' => [50]]));
+            ->post(route('mixes.store'), $this->payload(['flavors' => [$this->first->id, $this->second->id], 'ratios' => [50, 40]]));
 
         $response->assertSee('La suma de los porcentajes debe ser exactamente 100%.');
-        $this->assertSame([[$this->first->id, '50']], $this->formRows($response->getContent()));
+        $this->assertSame([[$this->first->id, '50'], [$this->second->id, '40']], $this->formRows($response->getContent()));
     }
 
     // Spec 013, RF3: sin sesión, el enlace pide entrar y después abre el formulario con el sabor.
@@ -1469,7 +1514,7 @@ class MixTest extends TestCase
         $this->get(route('login'))->assertOk();
         $this->post(route('auth.login'), ['email' => $this->user->email, 'password' => 'password'])->assertRedirect($form);
 
-        $this->assertSame([[$this->notFavorite->id, '']], $this->formRows($this->get($form)->getContent()));
+        $this->assertSame([[$this->notFavorite->id, '50'], [null, '50']], $this->formRows($this->get($form)->getContent()));
     }
 
     // Spec 013, RF1 y RF3: "Crear mezcla" de la ventana lleva el sabor, con y sin sesión.

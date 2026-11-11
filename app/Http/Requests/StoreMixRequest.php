@@ -25,7 +25,8 @@ class StoreMixRequest extends FormRequest {
         return [
             'name' => 'required|string|max:180',
             'notes' => 'nullable|string',
-            'flavors' => 'required|array|min:1',
+            // Spec 014, RF7: una mezcla necesita al menos 2 sabores (con menos, after() no se ejecuta)
+            'flavors' => 'required|array|min:2',
             // `bail`: `exists` no debe consultar un valor que no es un id (fallaría en Postgres)
             'flavors.*' => 'bail|required|integer|min:1|distinct|exists:flavors,id',
             'ratios' => 'required|array|min:1',
@@ -87,9 +88,9 @@ class StoreMixRequest extends FormRequest {
             'name.string' => 'El nombre de la mezcla debe ser un texto.',
             'name.max' => 'El nombre de la mezcla no puede superar los 180 caracteres.',
             'notes.string' => 'Las notas deben ser un texto.',
-            'flavors.required' => 'Debes añadir al menos un sabor.',
+            'flavors.required' => 'Una mezcla necesita al menos 2 sabores.',
             'flavors.array' => 'Los sabores deben enviarse como una lista.',
-            'flavors.min' => 'Debes añadir al menos un sabor.',
+            'flavors.min' => 'Una mezcla necesita al menos 2 sabores.',
             'flavors.*.required' => 'Selecciona un sabor en cada fila.',
             'flavors.*.integer' => 'El sabor seleccionado no es válido.',
             'flavors.*.min' => 'El sabor seleccionado no es válido.',
