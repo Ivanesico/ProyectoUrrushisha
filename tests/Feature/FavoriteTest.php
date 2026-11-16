@@ -309,6 +309,100 @@ class FavoriteTest extends TestCase
         $this->get(route('favorites.index'))->assertDontSee('<h3 class="fav-group-title"', false);
     }
 
+    // Spec 015: orden por el precio de 50 g.
+
+    /**
+     * @param  array<int, float>  $prices  gramos => precio
+     */
+    private function favoriteWithPrices(User $user, string $name, array $prices, array $attributes = []): Flavor
+    {
+        $flavor = $this->favoriteFor($user, ['name' => $name] + $attributes);
+
+        foreach ($prices as $grams => $price) {
+            $flavor->prices()->create(['grams' => $grams, 'price' => $price]);
+        }
+
+        return $flavor;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function favoriteNames(User $user, array $query): array
+    {
+        $content = $this->actingAs($user)->get(route('favorites.index', $query))->assertOk()->getContent();
+        preg_match_all('/data-name="([^"]+)"/u', $content, $names);
+
+        return $names[1];
+    }
+
+    public function test_the_sort_selector_offers_the_price_sorts_at_the_end(): void
+    {
+        $user = User::factory()->create();
+        $this->favoriteWithPrices($user, 'Menta', [50 => 10]);
+
+        $content = $this->actingAs($user)->get(route('favorites.index', ['sort' => 'price_desc']))->assertOk()->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '/<option value="recent"[^>]*>Añadidos recientemente<\/option>\s*<option value="price_asc">Precio \(menor a mayor\)<\/option>\s*<option value="price_desc" selected>Precio \(mayor a menor\)<\/option>\s*<\/select>/u',
+            $content,
+        );
+        $this->assertStringNotContainsString('<h3 class="fav-group-title"', $content);
+    }
+
+    public function test_it_sorts_the_favorites_by_the_50g_price_in_both_directions(): void
+    {
+        $user = User::factory()->create();
+        $this->favoriteWithPrices($user, 'Medio', [50 => 12.5]);
+        $this->favoriteWithPrices($user, 'Caro', [50 => 20, 200 => 50]);
+        $this->favoriteWithPrices($user, 'Barato', [50 => 9.95]);
+        // Solo cuenta el de 50 g: un formato más barato de otra cantidad no influye.
+        $this->favoriteWithPrices($user, 'Grande', [50 => 15, 1000 => 1]);
+
+        $this->assertSame(['Barato', 'Medio', 'Grande', 'Caro'], $this->favoriteNames($user, ['sort' => 'price_asc']));
+        $this->assertSame(['Caro', 'Grande', 'Medio', 'Barato'], $this->favoriteNames($user, ['sort' => 'price_desc']));
+    }
+
+    public function test_favorites_without_a_50g_price_are_shown_last_by_name_in_both_directions(): void
+    {
+        $user = User::factory()->create();
+        $this->favoriteWithPrices($user, 'Zeta sin precio', []);
+        $this->favoriteWithPrices($user, 'Ámbar solo 200', [200 => 5]);
+        $this->favoriteWithPrices($user, 'Caro', [50 => 20]);
+        $this->favoriteWithPrices($user, 'Barato', [50 => 10]);
+
+        $this->assertSame(['Barato', 'Caro', 'Ámbar solo 200', 'Zeta sin precio'], $this->favoriteNames($user, ['sort' => 'price_asc']));
+        $this->assertSame(['Caro', 'Barato', 'Ámbar solo 200', 'Zeta sin precio'], $this->favoriteNames($user, ['sort' => 'price_desc']));
+    }
+
+    public function test_equal_prices_are_ordered_by_name_in_both_directions(): void
+    {
+        $user = User::factory()->create();
+        $this->favoriteWithPrices($user, 'Menta', [50 => 12]);
+        $this->favoriteWithPrices($user, 'Ámbar', [50 => 12]);
+        $this->favoriteWithPrices($user, 'coco', [50 => 12]);
+        $this->favoriteWithPrices($user, 'Barato', [50 => 8]);
+
+        $this->assertSame(['Barato', 'Ámbar', 'coco', 'Menta'], $this->favoriteNames($user, ['sort' => 'price_asc']));
+        $this->assertSame(['Ámbar', 'coco', 'Menta', 'Barato'], $this->favoriteNames($user, ['sort' => 'price_desc']));
+    }
+
+    public function test_the_price_sort_is_applied_together_with_the_filters(): void
+    {
+        $user = User::factory()->create();
+        $brand = Brand::factory()->create();
+        $this->favoriteWithPrices($user, 'Menta barata', [50 => 9], ['brand_id' => $brand->id]);
+        $this->favoriteWithPrices($user, 'Menta cara', [50 => 19], ['brand_id' => $brand->id]);
+        $this->favoriteWithPrices($user, 'Menta sin precio', [], ['brand_id' => $brand->id]);
+        $this->favoriteWithPrices($user, 'Menta de otra marca', [50 => 30]);
+        $this->favoriteWithPrices($user, 'Coco', [50 => 25], ['brand_id' => $brand->id]);
+
+        $this->assertSame(
+            ['Menta cara', 'Menta barata', 'Menta sin precio'],
+            $this->favoriteNames($user, ['brand_id' => $brand->id, 'search' => 'menta', 'sort' => 'price_desc']),
+        );
+    }
+
     public function test_the_filters_only_offer_values_of_the_user_favorites_and_keep_the_selection(): void
     {
         $user = User::factory()->create();

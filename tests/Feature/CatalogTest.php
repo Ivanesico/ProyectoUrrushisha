@@ -197,6 +197,105 @@ class CatalogTest extends TestCase
         );
     }
 
+    // Spec 015: orden por precio de 50 g.
+
+    /**
+     * @param  array<int, float>  $prices  gramos => precio
+     * @param  array<string, mixed>  $attributes
+     */
+    private function flavorWithPrices(string $name, array $prices, array $attributes = []): Flavor
+    {
+        $flavor = Flavor::factory()->create(['name' => $name] + $attributes);
+
+        foreach ($prices as $grams => $price) {
+            $flavor->prices()->create(['grams' => $grams, 'price' => $price]);
+        }
+
+        return $flavor;
+    }
+
+    // RF2: solo cuenta el precio de 50 g, aunque otro formato sea más barato.
+    public function test_it_orders_by_the_50g_price_in_both_directions(): void
+    {
+        $this->flavorWithPrices('Caro', [50 => 20, 25 => 1]);
+        $this->flavorWithPrices('Barato', [50 => 9.5, 200 => 30]);
+        $this->flavorWithPrices('Medio', [50 => 12.25]);
+
+        $this->assertSame(['Barato', 'Medio', 'Caro'], $this->names($this->catalog(['sort' => 'price_asc'])));
+        $this->assertSame(['Caro', 'Medio', 'Barato'], $this->names($this->catalog(['sort' => 'price_desc'])));
+    }
+
+    // RF2 y RF3: sin precio de 50 g (aunque tenga otros formatos) se muestra al final en los dos sentidos.
+    public function test_flavors_without_a_50g_price_are_shown_last_in_both_directions(): void
+    {
+        $this->flavorWithPrices('Zeta sin precio', []);
+        $this->flavorWithPrices('Alfa solo 200 g', [200 => 5]);
+        $this->flavorWithPrices('Caro', [50 => 20]);
+        $this->flavorWithPrices('Barato', [50 => 10]);
+
+        $ascending = $this->catalog(['sort' => 'price_asc']);
+        $this->assertSame(['Barato', 'Caro', 'Alfa solo 200 g', 'Zeta sin precio'], $this->names($ascending));
+        $this->assertSame(4, $ascending->viewData('flavors')->total());
+
+        $this->assertSame(
+            ['Caro', 'Barato', 'Alfa solo 200 g', 'Zeta sin precio'],
+            $this->names($this->catalog(['sort' => 'price_desc'])),
+        );
+    }
+
+    // RF4: a igual precio, nombre A-Z (sin mayúsculas ni acentos) y después id; también entre los sin precio.
+    public function test_equal_prices_are_ordered_by_name_and_then_by_id(): void
+    {
+        $this->flavorWithPrices('menta', [50 => 10]);
+        $this->flavorWithPrices('Árbol', [50 => 10]);
+        $firstTwin = $this->flavorWithPrices('Coco', [50 => 10]);
+        $secondTwin = $this->flavorWithPrices('Coco', [50 => 10]);
+        $this->flavorWithPrices('Uva', []);
+        $this->flavorWithPrices('Bayas', []);
+
+        foreach (['price_asc', 'price_desc'] as $sort) {
+            $flavors = $this->catalog(['sort' => $sort])->viewData('flavors');
+
+            $this->assertSame(['Árbol', 'Coco', 'Coco', 'menta', 'Bayas', 'Uva'], $flavors->pluck('name')->all(), $sort);
+            $this->assertSame([$firstTwin->id, $secondTwin->id], $flavors->where('name', 'Coco')->pluck('id')->values()->all(), $sort);
+        }
+    }
+
+    // RF5: se combina con los filtros.
+    public function test_the_price_sort_is_applied_together_with_the_filters(): void
+    {
+        $this->flavorWithPrices('Menta cara', [50 => 15]);
+        $this->flavorWithPrices('Coco', [50 => 1]);
+        $this->flavorWithPrices('Menta barata', [50 => 8]);
+        $this->flavorWithPrices('Menta sin precio', []);
+
+        $this->assertSame(
+            ['Menta cara', 'Menta barata', 'Menta sin precio'],
+            $this->names($this->catalog(['name' => 'menta', 'sort' => 'price_desc'])),
+        );
+    }
+
+    // RF5: "Limpiar" conserva el orden por precio y la paginación lo mantiene.
+    public function test_clear_and_the_pagination_keep_the_price_sort(): void
+    {
+        foreach (range(1, 13) as $number) {
+            $this->flavorWithPrices('Menta '.$number, [50 => $number]);
+        }
+
+        $content = $this->catalog(['name' => 'menta', 'sort' => 'price_asc'])->assertSee('?name=menta&sort=price_asc&page=2')->getContent();
+        $this->assertSame(route('home', ['sort' => 'price_asc']), $this->clearLink($content));
+    }
+
+    // RF1 (portada): las opciones aparecen al final del selector.
+    public function test_the_sort_selector_offers_the_price_sorts(): void
+    {
+        $this->assertSame(['price_asc', 'price_desc'], array_slice(array_keys(Flavor::CATALOG_SORTS), -2));
+
+        $form = $this->sortForm($this->catalog(['sort' => 'price_desc'])->getContent());
+        $this->assertStringContainsString('<option value="price_asc">Precio (menor a mayor)</option>', $form);
+        $this->assertStringContainsString('<option value="price_desc" selected>Precio (mayor a menor)</option>', $form);
+    }
+
     /**
      * @return array<string, array{string}>
      */
@@ -208,6 +307,8 @@ class CatalogTest extends TestCase
             'nombre Z-A' => ['name_desc'],
             'marca' => ['brand'],
             'categoría' => ['category'],
+            'precio menor a mayor' => ['price_asc'],
+            'precio mayor a menor' => ['price_desc'],
         ];
     }
 
@@ -220,12 +321,18 @@ class CatalogTest extends TestCase
         $ids = [];
 
         foreach (range(1, 20) as $number) {
-            $ids[] = Flavor::factory()->create([
+            $flavor = Flavor::factory()->create([
                 'name' => 'Menta',
                 'brand_id' => $brand->id,
                 'category_id' => $number % 2 ? $category->id : null,
                 'created_at' => $created,
-            ])->id;
+            ]);
+            $ids[] = $flavor->id;
+
+            // Spec 015: precios de 50 g repetidos y sabores sin precio, para probar los empates.
+            if ($number % 3) {
+                $flavor->prices()->create(['grams' => 50, 'price' => $number % 2 ? 10 : 12]);
+            }
         }
 
         $seen = [];
@@ -312,8 +419,8 @@ class CatalogTest extends TestCase
 
         preg_match_all('/<option value="(\w+)"( selected)?>\s*([^<]+?)\s*<\/option>/', $form, $options, PREG_SET_ORDER);
         $this->assertSame(
-            // Spec 011: "Mejor valorados" al final.
-            ['recent' => 'Añadidos recientemente', 'name_asc' => 'Nombre (A-Z)', 'name_desc' => 'Nombre (Z-A)', 'brand' => 'Marca', 'category' => 'Categoría', 'top_rated' => 'Mejor valorados'],
+            // Spec 011: "Mejor valorados" después de los anteriores; spec 015: los de precio al final.
+            ['recent' => 'Añadidos recientemente', 'name_asc' => 'Nombre (A-Z)', 'name_desc' => 'Nombre (Z-A)', 'brand' => 'Marca', 'category' => 'Categoría', 'top_rated' => 'Mejor valorados', 'price_asc' => 'Precio (menor a mayor)', 'price_desc' => 'Precio (mayor a menor)'],
             collect($options)->mapWithKeys(fn ($option) => [$option[1] => $option[3]])->all(),
         );
         $this->assertSame(['brand'], collect($options)->filter(fn ($option) => $option[2] !== '')->pluck(1)->values()->all());

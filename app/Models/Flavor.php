@@ -27,6 +27,8 @@ class Flavor extends Model {
         'brand' => 'Marca',
         'category' => 'Categoría',
         'top_rated' => 'Mejor valorados',
+        'price_asc' => 'Precio (menor a mayor)',
+        'price_desc' => 'Precio (mayor a menor)',
     ];
 
     // Spec 011: opciones del filtro "Valoración" (media mínima, redondeada a un decimal).
@@ -242,6 +244,21 @@ class Flavor extends Model {
                 $direction = $sort === 'name_asc' ? 'asc' : 'desc';
 
                 return $query->orderByRaw("{$name} {$direction}")->orderByRaw("{$id} asc");
+
+            case 'price_asc':
+            case 'price_desc':
+                // Spec 015: solo cuenta el precio de 50 g (como mucho una fila por el único flavor_id + grams).
+                // Sin precio de 50 g al final en los dos sentidos; empates por nombre A-Z y por id.
+                $prices = $grammar->wrapTable('flavor_prices');
+                $price = "(select {$grammar->wrap('flavor_prices.price')} from {$prices}"
+                        . " where {$grammar->wrap('flavor_prices.flavor_id')} = {$id}"
+                        . " and {$grammar->wrap('flavor_prices.grams')} = 50)";
+                $direction = $sort === 'price_asc' ? 'asc' : 'desc';
+
+                return $query->orderByRaw("case when {$price} is null then 1 else 0 end")
+                        ->orderByRaw("{$price} {$direction}")
+                        ->orderByRaw("{$name} asc")
+                        ->orderByRaw("{$id} asc");
 
             case 'brand':
             case 'category':

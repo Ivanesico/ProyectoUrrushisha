@@ -19,6 +19,8 @@ class FavoriteController extends Controller {
         'category' => 'Categoría',
         'type' => 'Tipo de tabaco',
         'recent' => 'Añadidos recientemente',
+        'price_asc' => 'Precio (menor a mayor)',
+        'price_desc' => 'Precio (mayor a menor)',
     ];
 
     // Se filtra y ordena en PHP: son solo los favoritos de un usuario, el resultado es igual
@@ -131,12 +133,33 @@ class FavoriteController extends Controller {
      * Lo que no tiene valor va al final; dentro de cada grupo, por nombre.
      */
     private function sortKey(Flavor $flavor, string $sort): array {
+        if ($sort === 'price_asc' || $sort === 'price_desc') {
+            return $this->priceSortKey($flavor, $sort);
+        }
+
         $value = $this->sortValue($flavor, $sort);
 
         return [
             $value === null ? 1 : 0,
             Flavor::normalizeSearchTerm($value ?? ''),
             Flavor::normalizeSearchTerm($flavor->name),
+        ];
+    }
+
+    /**
+     * Spec 015: solo cuenta el precio de 50 g (de los precios ya cargados), en céntimos enteros.
+     * Para "mayor a menor" se cambia el signo en lugar de invertir la lista: así los que no
+     * tienen precio siguen al final y el desempate sigue siendo por nombre A-Z y después id.
+     */
+    private function priceSortKey(Flavor $flavor, string $sort): array {
+        $price = $flavor->prices->firstWhere('grams', 50)?->price;
+        $cents = $price === null ? 0 : (int) round((float) $price * 100);
+
+        return [
+            $price === null ? 1 : 0,
+            $sort === 'price_desc' ? -$cents : $cents,
+            Flavor::normalizeSearchTerm($flavor->name),
+            $flavor->id,
         ];
     }
 

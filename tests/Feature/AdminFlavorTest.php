@@ -481,6 +481,27 @@ class AdminFlavorTest extends TestCase
         }
     }
 
+    // Spec 015, RF1-RF3 (admin): las opciones de precio aparecen y ordenan por el precio de 50 g.
+    public function test_the_admin_list_can_be_sorted_by_the_50g_price(): void
+    {
+        $html = $this->get(route('admin.flavors.index', ['sort' => 'price_desc']))->assertOk()->getContent();
+        $this->assertStringContainsString('<option value="price_asc">Precio (menor a mayor)</option>', $html);
+        $this->assertStringContainsString('<option value="price_desc" selected>Precio (mayor a menor)</option>', $html);
+
+        $cheap = Flavor::factory()->create(['name' => 'Barato']);
+        $cheap->prices()->createMany([['grams' => 50, 'price' => 8], ['grams' => 200, 'price' => 25]]);
+        Flavor::factory()->notPublic()->create(['name' => 'Caro oculto'])->prices()->create(['grams' => 50, 'price' => 14.5]);
+        Flavor::factory()->create(['name' => 'Sin 50 g'])->prices()->create(['grams' => 25, 'price' => 1]);
+        Flavor::factory()->create(['name' => 'Anís sin precio']);
+
+        $names = fn (string $sort) => $this->get(route('admin.flavors.index', ['sort' => $sort]))
+            ->assertOk()
+            ->viewData('flavors')->pluck('name')->all();
+
+        $this->assertSame(['Caro oculto', 'Barato', 'Anís sin precio', 'Sin 50 g'], $names('price_desc'));
+        $this->assertSame(['Barato', 'Caro oculto', 'Anís sin precio', 'Sin 50 g'], $names('price_asc'));
+    }
+
     public function test_the_default_sort_is_selected_when_none_is_chosen(): void
     {
         $this->get(route('admin.flavors.index'))
